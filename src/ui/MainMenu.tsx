@@ -2,27 +2,38 @@ import React from 'react';
 
 interface MainMenuProps {
   onStart: () => void;
+  highScore: number;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStart, highScore }) => {
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
+        background: 'rgba(0, 0, 0, 0.6)',
+        padding: '32px',
+        borderRadius: '16px',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        color: 'white',
+        gap: '16px',
+        minWidth: '280px',
       }}
     >
-      <h1>Doodle Jump</h1>
-      <button onClick={onStart} style={{ fontSize: '24px', padding: '10px 20px' }}>
+      <h1 style={{ margin: 0 }}>Sky Hopper</h1>
+      <p style={{ margin: 0 }}>Reach as high as you can!</p>
+      <div>High Score: {highScore}</div>
+      <button
+        type="button"
+        onClick={onStart}
+        style={{
+          fontSize: '20px',
+          padding: '12px 24px',
+          borderRadius: '999px',
+          border: 'none',
+          background: '#4caf50',
+          color: '#000',
+          cursor: 'pointer',
+        }}
+      >
         Start Game
       </button>
     </div>

@@ -1,39 +1,89 @@
 import { Scene } from 'phaser';
+import { CFG } from '../config/GameConfig';
+import { applyDeadzone, clamp } from '../core/Mathf';
+import { PlayerInput, Tick } from '../core/Types';
 
 export class InputManager {
-  public axisX: number = 0;
-  private scene: Scene;
-  private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
+  private readonly scene: Scene;
+  private readonly left: Phaser.Input.Keyboard.Key;
+  private readonly right: Phaser.Input.Keyboard.Key;
+  private readonly a: Phaser.Input.Keyboard.Key;
+  private readonly d: Phaser.Input.Keyboard.Key;
+  private readonly jumpKey: Phaser.Input.Keyboard.Key;
+
+  private pointerAxis = 0;
+  private keyboardAxis = 0;
+  private jumpBuffered = false;
 
   constructor(scene: Scene) {
     this.scene = scene;
-    this.cursors = this.scene.input.keyboard!.createCursorKeys();
+    const keyboard = scene.input.keyboard!;
+    this.left = keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.LEFT,
+      true,
+      false
+    );
+    this.right = keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      true,
+      false
+    );
+    this.a = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A, true, false);
+    this.d = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D, true, false);
+    this.jumpKey = keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE,
+      true,
+      false
+    );
 
-    // Touch controls
+    this.scene.input.addPointer(2);
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.x < this.scene.scale.width / 2) {
-        this.axisX = -1;
-      } else {
-        this.axisX = 1;
-      }
+      const width = this.scene.scale.width;
+      this.pointerAxis = pointer.x < width / 2 ? -1 : 1;
+      this.consumeJump(pointer.downX === pointer.upX);
+    });
+    this.scene.input.on('pointerup', () => {
+      this.pointerAxis = 0;
     });
 
-    this.scene.input.on('pointerup', () => {
-      this.axisX = 0;
-    });
+    document.body.style.touchAction = 'none';
   }
 
-  update() {
-    // Keyboard controls
-    if (this.cursors.left.isDown || this.scene.input.keyboard!.addKey('A').isDown) {
-      this.axisX = -1;
-    } else if (this.cursors.right.isDown || this.scene.input.keyboard!.addKey('D').isDown) {
-      this.axisX = 1;
-    } else {
-      // If no keyboard input, rely on touch or reset
-      if (this.axisX !== -1 && this.axisX !== 1) {
-        this.axisX = 0;
-      }
+  sample(tick: Tick): PlayerInput {
+    this.keyboardAxis = 0;
+    if (this.left.isDown || this.a.isDown) {
+      this.keyboardAxis -= 1;
     }
+    if (this.right.isDown || this.d.isDown) {
+      this.keyboardAxis += 1;
+    }
+
+    const axis = clamp(this.pointerAxis || this.keyboardAxis, -1, 1);
+    const normalized = applyDeadzone(axis, CFG.input.keyboardDeadzone);
+
+    if (Phaser.Input.Keyboard.JustDown(this.jumpKey)) {
+      this.jumpBuffered = true;
+    }
+
+    const jump = this.consumeJump();
+
+    return {
+      tick,
+      axisX: normalized,
+      jump,
+    };
+  }
+
+  private consumeJump(force = false): boolean {
+    if (force) {
+      const wasBuffered = this.jumpBuffered;
+      this.jumpBuffered = false;
+      return wasBuffered;
+    }
+    if (this.jumpBuffered) {
+      this.jumpBuffered = false;
+      return true;
+    }
+    return false;
   }
 }

@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   base: './',
+  plugins: [react()],
   build: {
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
@@ -21,7 +23,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/tests/setup.ts',
     coverage: {
-      provider: 'v8'
+      provider: 'v8',
     },
+    include: ['src/tests/**/*.spec.ts'],
+    exclude: ['src/tests/e2e/**'],
   },
 });

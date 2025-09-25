@@ -1,35 +1,51 @@
 import { describe, it, expect } from 'vitest';
 import { World } from '../sim/World';
-import { hashWorldSnapshot } from '../sim/Determinism';
+import { hashWorld } from '../sim/Determinism';
+import { CFG } from '../config/GameConfig';
 
-describe('World Hash', () => {
-  it('should be deterministic for the same inputs', () => {
-    const world1 = new World('test-seed');
-    const world2 = new World('test-seed');
+const TICKS = CFG.rng.snapshotInterval * 2;
 
-    for (let i = 0; i < 1000; i++) {
-      world1.update(1 / 60, 0);
-      world2.update(1 / 60, 0);
+describe('World hashing and spawning', () => {
+  it('produces identical hashes for identical inputs', () => {
+    const worldA = new World('hash-seed');
+    const worldB = new World('hash-seed');
+
+    for (let tick = 0; tick < TICKS; tick += 1) {
+      const input = { tick, axisX: Math.sin(tick * 0.01), jump: false };
+      worldA.step(input);
+      worldB.step(input);
     }
 
-    const hash1 = hashWorldSnapshot(world1);
-    const hash2 = hashWorldSnapshot(world2);
-
-    expect(hash1).toEqual(hash2);
+    expect(hashWorld(worldA)).toEqual(hashWorld(worldB));
   });
 
-  it('should be different for different inputs', () => {
-    const world1 = new World('test-seed');
-    const world2 = new World('test-seed');
+  it('produces different hashes for divergent inputs', () => {
+    const worldA = new World('hash-seed');
+    const worldB = new World('hash-seed');
 
-    for (let i = 0; i < 1000; i++) {
-      world1.update(1 / 60, 0);
-      world2.update(1 / 60, 0.1); // Different input
+    for (let tick = 0; tick < TICKS; tick += 1) {
+      worldA.step({ tick, axisX: 0, jump: false });
+      worldB.step({ tick, axisX: tick % 2 === 0 ? 0.5 : -0.5, jump: false });
     }
 
-    const hash1 = hashWorldSnapshot(world1);
-    const hash2 = hashWorldSnapshot(world2);
+    expect(hashWorld(worldA)).not.toEqual(hashWorld(worldB));
+  });
 
-    expect(hash1).not.toEqual(hash2);
+  it('keeps platform gaps within configured bounds', () => {
+    const world = new World('spacing-seed');
+    let lastY = -Infinity;
+    for (let tick = 0; tick < 2000; tick += 1) {
+      world.step({ tick, axisX: 0, jump: false });
+      for (const platform of world.platforms) {
+        if (platform.position.y > lastY) {
+          const gap = platform.position.y - lastY;
+          if (lastY !== -Infinity) {
+            expect(gap).toBeGreaterThanOrEqual(CFG.difficulty.gapMinStart - 1);
+            expect(gap).toBeLessThanOrEqual(CFG.difficulty.gapMaxEnd + 40);
+          }
+          lastY = platform.position.y;
+        }
+      }
+    }
   });
 });

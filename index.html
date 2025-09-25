@@ -1,19 +1,43 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Doodle Jump</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Sky Hopper</title>
     <style>
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
-        background: #000;
+        background: #050915;
+        overflow: hidden;
+        font-family: 'Inter', system-ui, sans-serif;
+      }
+      #app {
+        width: 100vw;
+        height: 100vh;
+      }
+      #ui-layer {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      button {
+        font-family: inherit;
       }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="ui-layer"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

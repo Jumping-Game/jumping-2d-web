@@ -1,54 +1,39 @@
 import { World } from './World';
 
-/**
- * A simple hashing function for determinism checking.
- * This is not a cryptographic hash function.
- * @param str The string to hash.
- * @returns A 32-bit hash.
- */
-function simpleHash(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return hash;
-}
+const FNV_OFFSET = 0xcbf29ce484222325n;
+const FNV_PRIME = 0x100000001b3n;
 
-/**
- * Creates a snapshot of the world state and returns a hash of it.
- * @param world The world to hash.
- * @returns A hash of the world state.
- */
-export function hashWorldSnapshot(world: World): number {
-  const parts: (string | number)[] = [];
+export function hashWorld(world: World): string {
+  let hash = FNV_OFFSET;
+  const mix = (value: number): void => {
+    const normalized = Math.floor(value * 1000);
+    hash ^= BigInt(normalized);
+    hash = (hash * FNV_PRIME) & ((1n << 64n) - 1n);
+  };
 
-  // Player state
-  parts.push(world.player.position.x.toFixed(3));
-  parts.push(world.player.position.y.toFixed(3));
-  parts.push(world.player.velocity.x.toFixed(3));
-  parts.push(world.player.velocity.y.toFixed(3));
-  parts.push(world.player.state);
+  mix(world.tick);
+  mix(world.score);
+  mix(world.player.position.x);
+  mix(world.player.position.y);
+  mix(world.player.velocity.x);
+  mix(world.player.velocity.y);
+  mix(world.player.state);
 
-  // Platforms state
   for (const platform of world.platforms) {
-    parts.push(platform.position.x.toFixed(3));
-    parts.push(platform.position.y.toFixed(3));
-    parts.push(platform.type);
-    parts.push(platform.isBroken);
+    mix(platform.id);
+    mix(platform.position.x);
+    mix(platform.position.y);
+    mix(platform.type);
+    mix(platform.broken ? 1 : 0);
   }
 
-  // Powerups state
   for (const powerup of world.powerups) {
-    parts.push(powerup.position.x.toFixed(3));
-    parts.push(powerup.position.y.toFixed(3));
-    parts.push(powerup.type);
+    mix(powerup.id);
+    mix(powerup.position.x);
+    mix(powerup.position.y);
+    mix(powerup.type);
+    mix(powerup.active ? 1 : 0);
   }
 
-  // World properties
-  parts.push(world.tick);
-  parts.push(world.currentHeight);
-
-  return simpleHash(parts.join('|'));
+  return `0x${hash.toString(16).padStart(16, '0')}`;
 }

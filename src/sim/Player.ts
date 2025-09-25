@@ -1,58 +1,126 @@
-import { Vec2 } from '../core/Types';
 import { CFG } from '../config/GameConfig';
-import { clamp } from '../core/Mathf';
+import { clamp, lerp } from '../core/Mathf';
+import { PlayerInput, Tick, Vec2 } from '../core/Types';
 
 export enum PlayerState {
-  Alive,
-  Dead,
+  Alive = 0,
+  Jetpacking = 1,
+  Dead = 2,
 }
 
-export class Player {
-  public position: Vec2;
-  public velocity: Vec2;
-  public state: PlayerState;
+const DT = 1 / CFG.tps;
 
-  constructor() {
-    this.position = { x: CFG.world.worldWidth / 2, y: 200 };
-    this.velocity = { x: 0, y: 0 };
+export class Player {
+  public readonly position: Vec2 = {
+    x: CFG.world.worldWidth / 2,
+    y: CFG.world.platformHeight + 180,
+  };
+  public readonly previousPosition: Vec2 = {
+    x: this.position.x,
+    y: this.position.y,
+  };
+  public readonly velocity: Vec2 = { x: 0, y: 0 };
+  public state: PlayerState = PlayerState.Alive;
+  private jetpackTicksRemaining = 0;
+
+  reset(): void {
+    this.position.x = CFG.world.worldWidth / 2;
+    this.position.y = CFG.world.platformHeight + 180;
+    this.previousPosition.x = this.position.x;
+    this.previousPosition.y = this.position.y;
+    this.velocity.x = 0;
+    this.velocity.y = 0;
     this.state = PlayerState.Alive;
+    this.jetpackTicksRemaining = 0;
   }
 
-  update(dt: number, inputAxisX: number) {
-    if (this.state !== PlayerState.Alive) return;
-
-    // Apply gravity
-    this.velocity.y += CFG.world.gravity * dt;
-
-    // Apply horizontal acceleration
-    this.velocity.x += inputAxisX * CFG.world.accel * dt;
-
-    // Apply friction
-    if (inputAxisX === 0) {
-      this.velocity.x *= 0.9; // A simple friction factor
+  step(_tick: Tick, input: PlayerInput): void {
+    if (this.state === PlayerState.Dead) {
+      this.cachePrevious();
+      return;
     }
 
-    // Clamp horizontal velocity
+    this.cachePrevious();
+
+    const axis = clamp(input.axisX, -1, 1);
+    const accel = CFG.world.accel * axis;
+    this.velocity.x += accel * DT;
+
+    if (axis === 0) {
+      this.velocity.x *= CFG.world.friction;
+    }
+
     this.velocity.x = clamp(this.velocity.x, -CFG.world.maxVx, CFG.world.maxVx);
 
-    // Update position
-    this.position.x += this.velocity.x * dt;
-    this.position.y += this.velocity.y * dt;
+    if (this.jetpackTicksRemaining > 0) {
+      this.state = PlayerState.Jetpacking;
+      this.velocity.y = CFG.world.jetpackVy;
+      this.jetpackTicksRemaining -= 1;
+    } else if (this.state === PlayerState.Jetpacking) {
+      this.state = PlayerState.Alive;
+    }
 
-    // Wrap around the world
+    this.velocity.y += CFG.world.gravity * DT;
+
+    this.position.x += this.velocity.x * DT;
+    this.position.y += this.velocity.y * DT;
+
     if (this.position.x < 0) {
-      this.position.x = CFG.world.worldWidth;
+      this.position.x += CFG.world.worldWidth;
+      this.previousPosition.x = this.position.x;
     } else if (this.position.x > CFG.world.worldWidth) {
-      this.position.x = 0;
+      this.position.x -= CFG.world.worldWidth;
+      this.previousPosition.x = this.position.x;
+    }
+
+    if (this.position.y < -CFG.camera.cullMargin) {
+      this.state = PlayerState.Dead;
     }
   }
 
-  jump() {
-    this.velocity.y = CFG.world.jumpVy;
+  applyBounce(multiplier = CFG.player.bounceDamp): void {
+    this.velocity.y = CFG.world.jumpVy * multiplier;
   }
 
-  die() {
+  applySpring(): void {
+    this.velocity.y = CFG.world.springVy;
+  }
+
+  applyJetpack(): void {
+    this.jetpackTicksRemaining = CFG.powerups.jetpackDurationTicks;
+    this.state = PlayerState.Jetpacking;
+    this.velocity.y = CFG.world.jetpackVy;
+  }
+
+  die(): void {
     this.state = PlayerState.Dead;
-    this.velocity = { x: 0, y: 0 };
+  }
+
+  getFeetY(): number {
+    return this.position.y;
+  }
+
+  getPreviousFeetY(): number {
+    return this.previousPosition.y;
+  }
+
+  getHalfWidth(): number {
+    return CFG.player.width / 2;
+  }
+
+  getHeight(): number {
+    return CFG.player.height;
+  }
+
+  getRenderPosition(alpha: number): Vec2 {
+    return {
+      x: lerp(this.previousPosition.x, this.position.x, alpha),
+      y: lerp(this.previousPosition.y, this.position.y, alpha),
+    };
+  }
+
+  private cachePrevious(): void {
+    this.previousPosition.x = this.position.x;
+    this.previousPosition.y = this.position.y;
   }
 }

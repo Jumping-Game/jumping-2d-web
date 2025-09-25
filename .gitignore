@@ -4,6 +4,8 @@
 
 # Build artifacts
 /dist
+/playwright-report
+/test-results
 
 # Logs
 npm-debug.log*

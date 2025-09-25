@@ -1,32 +1,28 @@
-import { Input, Snapshot } from './Protocol';
+import { NetInputPayload, S2CSnapshot } from './Protocol';
 
 export class NetClientStub {
-  private onSnapshotCallback?: (snapshot: Snapshot) => void;
+  private onSnapshotCallback?: (snapshot: S2CSnapshot) => void;
+  private inputBuffer: NetInputPayload[] = [];
 
   prepareJoin(name: string) {
-    console.log(`[NetClientStub] Preparing to join as ${name}`);
-    // In a real implementation, this would initiate a connection.
+    console.info(`[NetClientStub] prepareJoin(${name})`);
   }
 
   bufferInput(tick: number, axisX: number, jump: boolean) {
-    const input: Input = { tick, axisX, jump };
-    // In a real implementation, this would buffer the input.
-    // console.log(`[NetClientStub] Buffering input:`, input);
+    this.inputBuffer.push({ tick, axisX, jump });
   }
 
-  flushInputBatch() {
-    // In a real implementation, this would send the buffered input to the server.
-    // console.log(`[NetClientStub] Flushing input batch`);
+  flushInputBatch(): NetInputPayload[] {
+    const batch = [...this.inputBuffer];
+    this.inputBuffer.length = 0;
+    return batch;
   }
 
-  onSnapshot(cb: (snapshot: Snapshot) => void) {
+  onSnapshot(cb: (snapshot: S2CSnapshot) => void) {
     this.onSnapshotCallback = cb;
   }
 
-  // This method is for local simulation of receiving a snapshot.
-  simulateSnapshot(snapshot: Snapshot) {
-    if (this.onSnapshotCallback) {
-      this.onSnapshotCallback(snapshot);
-    }
+  simulateSnapshot(snapshot: S2CSnapshot) {
+    this.onSnapshotCallback?.(snapshot);
   }
 }

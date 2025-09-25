@@ -1,39 +1,53 @@
 import { Vec2 } from '../core/Types';
 
 export enum PowerupType {
-  Spring,
-  Jetpack,
+  Spring = 0,
+  Jetpack = 1,
 }
 
 export class Powerup {
-  public position: Vec2;
-  public type: PowerupType;
+  public id = 0;
+  public readonly position: Vec2 = { x: 0, y: 0 };
+  public type: PowerupType = PowerupType.Spring;
+  public active = true;
+  public width = 40;
+  public height = 40;
+  public attachedPlatformId?: number;
 
-  constructor() {
-    this.position = { x: 0, y: 0 };
-    this.type = PowerupType.Spring;
-  }
-
-  init(x: number, y: number, type: PowerupType) {
+  init(
+    id: number,
+    x: number,
+    y: number,
+    type: PowerupType,
+    attachedPlatformId?: number
+  ): Powerup {
+    this.id = id;
     this.position.x = x;
     this.position.y = y;
     this.type = type;
+    this.active = true;
+    this.attachedPlatformId = attachedPlatformId;
     return this;
   }
 }
 
 export class PowerupPool {
-  private pool: Powerup[] = [];
+  private readonly pool: Powerup[] = [];
 
-  get(x: number, y: number, type: PowerupType): Powerup {
-    if (this.pool.length > 0) {
-      const powerup = this.pool.pop()!;
-      return powerup.init(x, y, type);
-    }
-    return new Powerup().init(x, y, type);
+  get(
+    id: number,
+    x: number,
+    y: number,
+    type: PowerupType,
+    attachedPlatformId?: number
+  ): Powerup {
+    const powerup = this.pool.pop() ?? new Powerup();
+    return powerup.init(id, x, y, type, attachedPlatformId);
   }
 
-  release(powerup: Powerup) {
+  release(powerup: Powerup): void {
+    powerup.active = false;
+    powerup.attachedPlatformId = undefined;
     this.pool.push(powerup);
   }
 }

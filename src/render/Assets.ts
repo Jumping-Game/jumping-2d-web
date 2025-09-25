@@ -1,43 +1,52 @@
 import { Scene } from 'phaser';
+import { assetManifest } from '../assets/manifest';
 
-export class Assets {
-  private scene: Scene;
+export const TextureKeys = {
+  Player: 'player',
+  Platform: 'platform',
+  Spring: 'spring',
+  Jetpack: 'jetpack',
+  BgFar: 'bg_far',
+  BgMid: 'bg_mid',
+  BgNear: 'bg_near',
+} as const;
 
-  constructor(scene: Scene) {
-    this.scene = scene;
+export const AudioKeys = {
+  Jump: 'sfx_jump',
+  Spring: 'sfx_spring',
+  Break: 'sfx_break',
+} as const;
+
+export class AssetLoader {
+  constructor(private readonly scene: Scene) {}
+
+  preload(): void {
+    const { images, audio } = assetManifest;
+    this.scene.load.image(TextureKeys.Player, images.player);
+    this.scene.load.image(TextureKeys.Platform, images.platform);
+    this.scene.load.image(TextureKeys.Spring, images.spring);
+    this.scene.load.image(TextureKeys.Jetpack, images.jetpack);
+    this.scene.load.image(TextureKeys.BgFar, images.bgFar);
+    this.scene.load.image(TextureKeys.BgMid, images.bgMid);
+    this.scene.load.image(TextureKeys.BgNear, images.bgNear);
+
+    this.scene.load.audio(AudioKeys.Jump, audio.jump);
+    this.scene.load.audio(AudioKeys.Spring, audio.spring);
+    this.scene.load.audio(AudioKeys.Break, audio.break);
   }
 
-  preload() {
-    // Use simple colored rectangles as placeholders
-    this.scene.load.image('player', 'assets/player.png');
-    this.scene.load.image('platform', 'assets/platform.png');
-    this.scene.load.image('spring', 'assets/spring.png');
-  }
-
-  create() {
-    // Create placeholder graphics if assets are missing
-    if (!this.scene.textures.exists('player')) {
-      const playerGraphics = this.scene.add.graphics();
-      playerGraphics.fillStyle(0x00ff00, 1);
-      playerGraphics.fillRect(0, 0, 48, 64);
-      playerGraphics.generateTexture('player', 48, 64);
-      playerGraphics.destroy();
-    }
-
-    if (!this.scene.textures.exists('platform')) {
-      const platformGraphics = this.scene.add.graphics();
-      platformGraphics.fillStyle(0x8B4513, 1);
-      platformGraphics.fillRect(0, 0, 120, 18);
-      platformGraphics.generateTexture('platform', 120, 18);
-      platformGraphics.destroy();
-    }
-
-    if (!this.scene.textures.exists('spring')) {
-        const springGraphics = this.scene.add.graphics();
-        springGraphics.fillStyle(0xffff00, 1);
-        springGraphics.fillRect(0, 0, 32, 32);
-        springGraphics.generateTexture('spring', 32, 32);
-        springGraphics.destroy();
-      }
+  create(): void {
+    this.scene.textures
+      .get(TextureKeys.Player)
+      .setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.scene.textures
+      .get(TextureKeys.Platform)
+      .setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.scene.textures
+      .get(TextureKeys.Spring)
+      .setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.scene.textures
+      .get(TextureKeys.Jetpack)
+      .setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
 }

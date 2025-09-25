@@ -1,62 +1,100 @@
-import { Vec2 } from '../core/Types';
 import { CFG } from '../config/GameConfig';
+import { PlatformMovement, Tick, Vec2 } from '../core/Types';
 
 export enum PlatformType {
-  Static,
-  Moving,
-  Breakable,
-  OneShot,
+  Static = 0,
+  Moving = 1,
+  Breakable = 2,
+  OneShot = 3,
 }
 
 export class Platform {
-  public position: Vec2;
-  public type: PlatformType;
-  public width: number;
-  public height: number;
-  public isBroken: boolean;
-  public initialTime: number; // For moving platforms
+  public id = 0;
+  public type: PlatformType = PlatformType.Static;
+  public readonly position: Vec2 = { x: 0, y: 0 };
+  public width = CFG.world.platformWidth;
+  public height = CFG.world.platformHeight;
+  public movement?: PlatformMovement;
+  public broken = false;
+  public spawnTick: Tick = 0;
+  public oscillationCenterX = 0;
 
-  constructor() {
-    this.position = { x: 0, y: 0 };
-    this.type = PlatformType.Static;
-    this.width = CFG.world.platformWidth;
-    this.height = CFG.world.platformHeight;
-    this.isBroken = false;
-    this.initialTime = 0;
-  }
-
-  init(x: number, y: number, type: PlatformType, tick: number) {
+  init(
+    id: number,
+    x: number,
+    y: number,
+    type: PlatformType,
+    tick: Tick,
+    movement?: PlatformMovement
+  ): Platform {
+    this.id = id;
+    this.type = type;
     this.position.x = x;
     this.position.y = y;
-    this.type = type;
-    this.isBroken = false;
-    this.initialTime = tick / CFG.tps;
+    this.movement = movement;
+    this.spawnTick = tick;
+    this.oscillationCenterX = x;
+    this.broken = false;
     return this;
   }
 
-  update(tick: number) {
-    if (this.type === PlatformType.Moving) {
-      const time = tick / CFG.tps - this.initialTime;
-      const amplitude = (CFG.world.worldWidth - this.width) / 2;
-      this.position.x =
-        CFG.world.worldWidth / 2 +
-        amplitude * Math.sin((2 * Math.PI * time) / 4); // 4-second period
+  isPassable(): boolean {
+    return this.type === PlatformType.Breakable && this.broken;
+  }
+
+  update(tick: Tick): void {
+    if (!this.movement) {
+      this.position.x = wrapX(this.oscillationCenterX);
+      return;
     }
+
+    const { amplitude, periodTicks, phase } = this.movement;
+    const theta = (2 * Math.PI * (tick + phase)) / periodTicks;
+    const oscillated = this.oscillationCenterX + Math.sin(theta) * amplitude;
+    this.position.x = wrapX(oscillated);
+  }
+
+  getRenderX(tick: Tick, alpha: number): number {
+    if (!this.movement) {
+      return this.position.x;
+    }
+    const targetTick = tick + alpha;
+    const { amplitude, periodTicks, phase } = this.movement;
+    const theta = (2 * Math.PI * (targetTick + phase)) / periodTicks;
+    const oscillated = this.oscillationCenterX + Math.sin(theta) * amplitude;
+    return wrapX(oscillated);
   }
 }
 
 export class PlatformPool {
-  private pool: Platform[] = [];
+  private readonly pool: Platform[] = [];
 
-  get(x: number, y: number, type: PlatformType, tick: number): Platform {
-    if (this.pool.length > 0) {
-      const platform = this.pool.pop()!;
-      return platform.init(x, y, type, tick);
-    }
-    return new Platform().init(x, y, type, tick);
+  get(
+    id: number,
+    x: number,
+    y: number,
+    type: PlatformType,
+    tick: Tick,
+    movement?: PlatformMovement
+  ): Platform {
+    const platform = this.pool.pop() ?? new Platform();
+    return platform.init(id, x, y, type, tick, movement);
   }
 
-  release(platform: Platform) {
+  release(platform: Platform): void {
+    platform.broken = false;
+    platform.movement = undefined;
     this.pool.push(platform);
   }
+}
+
+function wrapX(x: number): number {
+  const width = CFG.world.worldWidth;
+  if (x < 0) {
+    return ((x % width) + width) % width;
+  }
+  if (x >= width) {
+    return x % width;
+  }
+  return x;
 }

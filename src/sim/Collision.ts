@@ -1,35 +1,87 @@
-import { Player } from './Player';
-import { Platform } from './Platform';
 import { CFG } from '../config/GameConfig';
+import { Player } from './Player';
+import { Platform, PlatformType } from './Platform';
 
-export function checkCollision(player: Player, platform: Platform): boolean {
-  // Simple AABB check
-  return (
-    player.position.x < platform.position.x + platform.width &&
-    player.position.x + 48 > platform.position.x && // Player width approx 48
-    player.position.y < platform.position.y + platform.height &&
-    player.position.y + 64 > platform.position.y // Player height approx 64
-  );
+function overlapsX(player: Player, platform: Platform): boolean {
+  const half = player.getHalfWidth();
+  const width = CFG.world.worldWidth;
+  const playerLeft = player.position.x - half;
+  const playerRight = player.position.x + half;
+  const platformLeft = platform.position.x;
+  const platformRight = platform.position.x + platform.width;
+
+  if (playerLeft < 0) {
+    return (
+      intervalsOverlap(
+        playerLeft + width,
+        playerRight + width,
+        platformLeft,
+        platformRight
+      ) ||
+      intervalsOverlap(playerLeft, playerRight, platformLeft, platformRight)
+    );
+  }
+
+  if (playerRight > width) {
+    return (
+      intervalsOverlap(
+        playerLeft - width,
+        playerRight - width,
+        platformLeft,
+        platformRight
+      ) ||
+      intervalsOverlap(playerLeft, playerRight, platformLeft, platformRight)
+    );
+  }
+
+  return intervalsOverlap(playerLeft, playerRight, platformLeft, platformRight);
 }
 
-export function resolveCollision(player: Player, platform: Platform): boolean {
-  // One-way collision: only land on top of platforms
-  if (player.velocity.y > 0) {
+function intervalsOverlap(
+  a1: number,
+  a2: number,
+  b1: number,
+  b2: number
+): boolean {
+  return Math.max(a1, b1) <= Math.min(a2, b2);
+}
+
+export function testLanding(player: Player, platform: Platform): boolean {
+  if (player.velocity.y > 0 || platform.isPassable()) {
     return false;
   }
 
-  const playerFeet = player.position.y;
-  const platformTop = platform.position.y + platform.height;
-
-  // Check if player's feet are just above the platform and were below it last frame
-  const previousPlayerFeet = playerFeet - player.velocity.y * (1 / CFG.tps);
-  if (playerFeet <= platformTop && previousPlayerFeet > platformTop) {
-    if (checkCollision(player, platform)) {
-      player.position.y = platformTop;
-      player.jump();
-      return true;
-    }
+  const top = platform.position.y + platform.height;
+  const feet = player.getFeetY();
+  const prevFeet = player.getPreviousFeetY();
+  const wasAbove = prevFeet - CFG.player.footOffset >= top;
+  const isBelow = feet <= top;
+  if (!wasAbove || !isBelow) {
+    return false;
   }
 
-  return false;
+  if (!overlapsX(player, platform)) {
+    return false;
+  }
+
+  return true;
+}
+
+export function resolveLanding(player: Player, platform: Platform): boolean {
+  if (!testLanding(player, platform)) {
+    return false;
+  }
+
+  const top = platform.position.y + platform.height;
+  player.position.y = top;
+  player.applyBounce();
+
+  if (
+    platform.type === PlatformType.Breakable ||
+    platform.type === PlatformType.OneShot
+  ) {
+    platform.broken = true;
+  }
+
+  return true;
 }

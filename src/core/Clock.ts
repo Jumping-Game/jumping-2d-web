@@ -1,61 +1,85 @@
+import { Tick } from './Types';
+
+const MAX_FRAME_DELTA_MS = 250; // avoid spiral of death
+
+type StepFn = (tick: Tick) => void;
+type RenderFn = (alpha: number) => void;
+
+type VisibilityHandler = () => void;
+
 export class Clock {
-  private tps: number;
-  private timeStep: number;
-  private accumulator: number;
-  private lastTime: number;
-  private tick: number;
-  private isRunning: boolean;
+  private readonly stepMs: number;
+  private accumulator = 0;
+  private lastTime = 0;
+  private tick: Tick = 0;
+  private running = false;
+  private rafId = 0;
+  private paused = false;
+  private readonly onStep: StepFn;
+  private readonly onRender?: RenderFn;
+  private readonly onVisibilityChange: VisibilityHandler;
 
-  public onUpdate: (tick: number, dt: number) => void;
+  constructor(tps: number, onStep: StepFn, onRender?: RenderFn) {
+    this.stepMs = 1000 / tps;
+    this.onStep = onStep;
+    this.onRender = onRender;
+    this.onVisibilityChange = () => {
+      if (document.hidden) {
+        this.pause();
+      } else {
+        this.resume();
+      }
+    };
+  }
 
-  constructor(tps: number, onUpdate: (tick: number, dt: number) => void) {
-    this.tps = tps;
-    this.timeStep = 1000 / this.tps;
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    this.paused = false;
     this.accumulator = 0;
-    this.lastTime = 0;
-    this.tick = 0;
-    this.isRunning = false;
-    this.onUpdate = onUpdate;
-
-    this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
-  }
-
-  start() {
-    if (this.isRunning) return;
-    this.isRunning = true;
     this.lastTime = performance.now();
-    document.addEventListener('visibilitychange', this.handleVisibilityChange);
-    requestAnimationFrame(this.loop.bind(this));
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.rafId = requestAnimationFrame((time) => this.loop(time));
   }
 
-  stop() {
-    this.isRunning = false;
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+  stop(): void {
+    if (!this.running) return;
+    this.running = false;
+    cancelAnimationFrame(this.rafId);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   }
 
-  private loop(time: number) {
-    if (!this.isRunning) return;
+  pause(): void {
+    this.paused = true;
+  }
 
-    const deltaTime = time - this.lastTime;
+  resume(): void {
+    if (!this.running) return;
+    this.paused = false;
+    this.accumulator = 0;
+    this.lastTime = performance.now();
+  }
+
+  private loop(time: number): void {
+    if (!this.running) return;
+
+    const delta = Math.min(time - this.lastTime, MAX_FRAME_DELTA_MS);
     this.lastTime = time;
-    this.accumulator += deltaTime;
 
-    while (this.accumulator >= this.timeStep) {
-      this.onUpdate(this.tick, this.timeStep / 1000);
-      this.tick++;
-      this.accumulator -= this.timeStep;
+    if (!this.paused) {
+      this.accumulator += delta;
+      while (this.accumulator >= this.stepMs) {
+        this.onStep(this.tick);
+        this.tick += 1;
+        this.accumulator -= this.stepMs;
+      }
     }
 
-    requestAnimationFrame(this.loop.bind(this));
-  }
-
-  private handleVisibilityChange() {
-    if (document.hidden) {
-      // Pause the clock, but keep it "running"
-      this.lastTime = performance.now();
-    } else {
-      // Resume the clock, reset lastTime to prevent a large jump
-      this.lastTime = performance.now();
+    if (this.onRender) {
+      const alpha = this.accumulator / this.stepMs;
+      this.onRender(alpha);
     }
+
+    this.rafId = requestAnimationFrame((next) => this.loop(next));
   }
 }

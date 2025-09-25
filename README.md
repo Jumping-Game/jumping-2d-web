@@ -1,98 +1,117 @@
-# Doodle Jump Clone
+# Sky Hopper
 
-This is a production-ready web client for a Doodle-Jump–style vertical jumper, built with Phaser 3, TypeScript, and Vite.
+Sky Hopper is a deterministic Doodle Jump–style vertical platformer built with **Phaser 3**, **TypeScript**, and **Vite**. The repo provides a production-ready single-player client with networking hooks modelled on the realtime protocol defined in [`NETWORK_PROTOCOL.md`](NETWORK_PROTOCOL.md).
 
 ## Features
 
-*   Endless upward scrolling with procedurally generated platforms.
-*   Deterministic simulation loop with a fixed timestep.
-*   Keyboard and touch controls.
-*   Camera follow, parallax background, and score HUD.
-*   Object pooling for platforms and power-ups to minimize garbage collection.
-*   CI-ready repository with ESLint, Prettier, Vitest, and Playwright.
-
-## Project Structure
-
-The project is organized into the following directories:
-
-*   `src/assets`: Game assets (images, sounds, etc.).
-*   `src/core`: Core utilities like the game clock, RNG, and math functions.
-*   `src/sim`: The deterministic simulation layer, including the world, player, platforms, and collision detection.
-*   `src/render`: The rendering layer, which uses Phaser to display the simulation.
-*   `src/input`: Input handling for keyboard and touch.
-*   `src/net`: Networking stubs for future real-time integration.
-*   `src/ui`: React components for the UI overlays.
-*   `src/config`: Game configuration constants.
-*   `src/tests`: Unit and end-to-end tests.
+- ⚙️ **Deterministic simulation** running at a fixed 60 Hz with seedable world generation.
+- 🪜 **Procedural platforms** (static, moving, breakable, one-shot) plus springs and jetpacks.
+- 🎮 **Keyboard and touch controls** with mobile-friendly deadzones.
+- 📷 **Camera follow** with parallax background, HUD, pause and game-over overlays.
+- 🧠 **Object pooling & culling** to keep GC pressure low and frame pacing smooth.
+- 🔊 **WebAudio SFX** (jump, spring, break) unlocked on user input.
+- 🧪 **CI-ready toolchain**: ESLint, Prettier, Vitest, Playwright smoke test, GitHub Actions.
+- 🔌 **Networking stubs** mirroring the pv=1 protocol (envelopes, input batching, snapshots).
 
 ## Getting Started
 
 ### Prerequisites
 
-*   [Node.js](https://nodejs.org/) (v18 or higher)
-*   [pnpm](https://pnpm.io/)
+- [Node.js](https://nodejs.org/) 20+
+- [pnpm](https://pnpm.io/) 8+
 
 ### Installation
 
-1.  Clone the repository:
-    ```bash
-    git clone <repository-url>
-    ```
-2.  Install the dependencies:
-    ```bash
-    pnpm install
-    ```
+```bash
+pnpm install
+```
 
-### Running the Game
-
-To start the development server, run:
+### Development Server
 
 ```bash
 pnpm dev
 ```
 
-The game will be available at `http://localhost:8080`.
+The dev server listens on [http://localhost:8080](http://localhost:8080). Click **Start Game** in the overlay to spawn the player and unlock audio.
 
-### Building for Production
-
-To build the game for production, run:
+### Build
 
 ```bash
 pnpm build
 ```
 
-The production-ready files will be located in the `dist` directory.
-
-### Running Tests
-
-To run the unit tests, run:
+### Preview
 
 ```bash
-pnpm test
+pnpm preview
 ```
 
-To run the end-to-end tests, run:
+### Tests
 
 ```bash
-pnpm test:e2e
+pnpm lint      # ESLint + Prettier enforcement
+pnpm test      # Vitest unit suite
+pnpm test:e2e  # Playwright smoke run
 ```
 
-## Architecture
+## Controls
 
-The game is built around a deterministic simulation core that is completely decoupled from the rendering layer.
+| Platform | Action                                         |
+| -------- | ---------------------------------------------- |
+| Desktop  | `←/A` move left, `→/D` move right, `Esc` pause |
+| Touch    | Tap / hold left or right half of the screen    |
 
-*   **Simulation (`/src/sim`)**: The simulation is responsible for all game logic, including physics, collision detection, and procedural generation. It runs at a fixed timestep (60 TPS) to ensure that the game is deterministic.
-*   **Rendering (`/src/render`)**: The rendering layer is responsible for displaying the simulation state to the user. It uses Phaser 3 to render the game objects and the UI.
+## Code Structure
 
-This separation of concerns makes the game easier to test and debug, and it also makes it possible to run the simulation on a server for multiplayer gameplay.
+```
+src/
+├─ assets/        # SVG + audio placeholders and manifest
+├─ config/        # Tunable constants (world, difficulty, audio)
+├─ core/          # Clock, RNG, math helpers, shared types
+├─ sim/           # Deterministic world (player, platforms, powerups, collisions)
+├─ render/        # Phaser scenes, HUD, asset loader, storage helpers
+├─ input/         # Keyboard + touch manager with deadzone normalisation
+├─ ui/            # React overlays (menu, pause, game-over) + UI bridge
+├─ net/           # Protocol typings and NetClient stub (no I/O yet)
+└─ tests/         # Vitest unit specs + Playwright smoke
+```
 
-## Next: Realtime Integration
+### Simulation & Determinism
 
-The current implementation includes networking stubs that are ready to be integrated with a real-time networking solution. The following steps will be required to add multiplayer support:
+- `Clock` runs a fixed-step accumulator (60 TPS) decoupled from rendering.
+- `World.step()` consumes a `PlayerInput` per tick and is pure given `(seed, tick, input)`.
+- `SpawnRules` produces platforms/powerups deterministically via `Xoroshiro128**` seeded from decimal strings.
+- `Determinism.hashWorld()` emits a 64-bit FNV-1a digest used in unit tests to confirm replay fidelity.
 
-1.  **Implement a WebSocket client**: The `NetClientStub` will need to be replaced with a real WebSocket client that can connect to a server.
-2.  **Send input to the server**: The client will need to send the player's input to the server at a regular interval.
-3.  **Receive snapshots from the server**: The client will need to receive world snapshots from the server and update the local simulation accordingly.
-4.  **Implement client-side prediction and reconciliation**: To reduce the effects of latency, the client will need to predict the player's movement and then reconcile it with the server's authoritative state.
+### Rendering
 
-The networking protocol is defined in `/src/net/Protocol.ts`.
+- `BootScene → MenuScene → GameScene → GameOverScene` pipeline.
+- Parallax layers use tile sprites; sprites snap to integer pixels for crisp visuals.
+- HUD renders score, high score, optional FPS counter, and pause control.
+- `UIManager` mounts React overlays (menu, pause, game-over) above the canvas.
+
+### Object Pooling & Culling
+
+`PlatformPool` and `PowerupPool` reuse instances. Objects falling below the camera cull margin are recycled. Moving platforms compute positions analytically (`sin`) to avoid floating-point drift.
+
+### Audio
+
+Light-weight PCM `.wav` effects (jump, spring, break) are generated at build time and triggered from simulation events. Playback waits for the first user gesture to satisfy mobile autoplay policies.
+
+## Realtime Integration TODOs
+
+The stubbed networking layer mirrors [`NETWORK_PROTOCOL.md`](NETWORK_PROTOCOL.md) (`pv=1`). To enable live multiplayer:
+
+1. **Transport** – Replace `NetClientStub` with a WebSocket client that exchanges `Envelope<T>` messages (`join`, `input_batch`, `snapshot`, etc.).
+2. **Prediction & Reconciliation** – Buffer local inputs, apply snapshots from `S2C_Snapshot`, and rewind/replay authoritative ticks when deltas arrive.
+3. **Tick Alignment** – Use `S2C_Start` to anchor local time, apply render delay (`interpMs = max(2×RTT, 100 ms)`), and expose extrapolated poses for remote players.
+4. **State Compression** – Quantise floats to 0.1 units when serialising, pack deltas for moving platforms, and validate checksums from `C2S_Input`.
+5. **Lifecycle** – Handle `S2C_PlayerPresence`, `S2C_Finish`, reconnect (`C2S_Reconnect`), and keep pings flowing every 5 s.
+
+## Asset Pipeline
+
+Placeholder SVG sprites live under `src/assets/images`, and PCM SFX in `src/assets/audio`. The manifest (`src/assets/manifest.ts`) centralises asset keys so Phaser loads via Vite’s module URLs. Swap files with production art/audio without touching scene code.
+
+## License
+
+MIT.

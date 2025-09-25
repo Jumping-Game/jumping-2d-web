@@ -1,10 +1,11 @@
-/** A 2D vector. */
+export type Tick = number;
+export type Seed = string;
+
 export interface Vec2 {
   x: number;
   y: number;
 }
 
-/** A rectangle defined by its top-left corner and dimensions. */
 export interface Rect {
   x: number;
   y: number;
@@ -12,8 +13,44 @@ export interface Rect {
   height: number;
 }
 
-/** Represents a discrete time step in the game simulation. */
-export type Tick = number;
+export interface PlayerInput {
+  tick: Tick;
+  axisX: number; // [-1,1]
+  jump: boolean;
+}
 
-/** A seed for the random number generator, represented as a string. */
-export type Seed = string;
+export interface PlatformMovement {
+  amplitude: number;
+  periodTicks: number;
+  phase: number;
+}
+
+export interface PlatformSnapshot {
+  id: number;
+  type: number;
+  x: number;
+  y: number;
+  broken: boolean;
+}
+
+export interface PowerupSnapshot {
+  id: number;
+  type: number;
+  x: number;
+  y: number;
+  active: boolean;
+}
+
+export interface WorldSnapshot {
+  tick: Tick;
+  score: number;
+  player: {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    state: number;
+  };
+  platforms: PlatformSnapshot[];
+  powerups: PowerupSnapshot[];
+}
