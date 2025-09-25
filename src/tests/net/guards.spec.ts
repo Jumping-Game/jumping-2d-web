@@ -73,7 +73,10 @@ describe('parseServerEnvelope', () => {
 
     const result = parseServerEnvelope(welcome);
     expect(result.ok).toBe(true);
-    expect(result.value?.payload.playerId).toBe('p_master');
+    if (!result.value || result.value.type !== 'welcome') {
+      throw new Error('Expected welcome envelope');
+    }
+    expect(result.value.payload.playerId).toBe('p_master');
   });
 
   it('rejects lobby_state messages with malformed players', () => {
@@ -136,7 +139,10 @@ describe('parseServerEnvelope', () => {
 
     const result = parseServerEnvelope(countdown);
     expect(result.ok).toBe(true);
-    expect(result.value?.payload.countdownSec).toBe(3);
+    if (!result.value || result.value.type !== 'start_countdown') {
+      throw new Error('Expected start_countdown envelope');
+    }
+    expect(result.value.payload.countdownSec).toBe(3);
   });
 
   it('rejects invalid snapshot payloads', () => {
