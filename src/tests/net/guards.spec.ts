@@ -49,8 +49,20 @@ describe('parseServerEnvelope', () => {
         roomState: 'lobby' as const,
         lobby: {
           players: [
-            { id: 'p_master', name: 'Master', ready: true, role: 'master' as const },
-            { id: 'p_member', name: 'Member', ready: false, role: 'member' as const },
+            {
+              id: 'p_master',
+              name: 'Master',
+              ready: true,
+              role: 'master' as const,
+              characterId: 'aurora',
+            },
+            {
+              id: 'p_member',
+              name: 'Member',
+              ready: false,
+              role: 'member' as const,
+              characterId: 'cobalt',
+            },
           ],
           maxPlayers: 4,
         },
@@ -71,7 +83,12 @@ describe('parseServerEnvelope', () => {
       payload: {
         roomState: 'lobby' as const,
         players: [
-          { id: 'p_master', name: 'Master', ready: true, role: 'master' as const },
+          {
+            id: 'p_master',
+            name: 'Master',
+            ready: true,
+            role: 'master' as const,
+          },
           // Missing ready flag
           { id: 'p_member', name: 'Member', role: 'member' as const },
         ],
@@ -81,6 +98,29 @@ describe('parseServerEnvelope', () => {
     const result = parseServerEnvelope(invalid);
     expect(result.ok).toBe(false);
     expect(result.error).toContain('player.ready');
+  });
+
+  it('rejects lobby players with invalid character ids', () => {
+    const invalid = {
+      ...baseEnvelope,
+      type: 'lobby_state' as const,
+      payload: {
+        roomState: 'lobby' as const,
+        players: [
+          {
+            id: 'p_master',
+            name: 'Master',
+            ready: true,
+            role: 'master' as const,
+            characterId: 'not-real',
+          },
+        ],
+      },
+    } as unknown;
+
+    const result = parseServerEnvelope(invalid);
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('characterId');
   });
 
   it('accepts start_countdown payloads', () => {

@@ -22,6 +22,8 @@ import {
   PROTOCOL_PV,
   type ServerMessageType,
 } from './Protocol';
+import { CHARACTER_OPTION_MAP } from '../config/characters';
+import type { CharacterId } from '../config/characters';
 
 export interface GuardResult<T> {
   ok: boolean;
@@ -43,13 +45,22 @@ const isBoolean = (value: unknown): value is boolean =>
 
 const isString = (value: unknown): value is string => typeof value === 'string';
 
-const clonePrimitive = <T extends number | string | boolean>(value: T): T => value;
+const isCharacterId = (value: unknown): value is CharacterId =>
+  isString(value) && CHARACTER_OPTION_MAP.has(value as CharacterId);
+
+const clonePrimitive = <T extends number | string | boolean>(value: T): T =>
+  value;
 
 const asRoomState = (value: unknown): GuardResult<NetRoomState> => {
   if (!isString(value)) {
     return fail('roomState must be string');
   }
-  if (value === 'lobby' || value === 'starting' || value === 'running' || value === 'finished') {
+  if (
+    value === 'lobby' ||
+    value === 'starting' ||
+    value === 'running' ||
+    value === 'finished'
+  ) {
     return ok(value);
   }
   return fail(`invalid roomState: ${value}`);
@@ -91,7 +102,9 @@ const validateWorldCfg = (value: unknown): GuardResult<NetWorldCfg> => {
   return ok(cfg as NetWorldCfg);
 };
 
-const validateDifficultyCfg = (value: unknown): GuardResult<NetDifficultyCfg> => {
+const validateDifficultyCfg = (
+  value: unknown
+): GuardResult<NetDifficultyCfg> => {
   if (!isRecord(value)) {
     return fail('difficulty config must be object');
   }
@@ -164,11 +177,22 @@ const validateLobbyPlayer = (value: unknown): GuardResult<LobbyPlayer> => {
   if (!role.ok || !role.value) {
     return fail(role.error ?? 'invalid player.role');
   }
+  let characterId: CharacterId | undefined;
+  if ('characterId' in value) {
+    if (value.characterId === undefined || value.characterId === null) {
+      characterId = undefined;
+    } else if (!isCharacterId(value.characterId)) {
+      return fail('player.characterId invalid');
+    } else {
+      characterId = value.characterId;
+    }
+  }
   return ok({
     id: value.id,
     name: value.name,
     ready: value.ready,
     role: role.value,
+    characterId,
   });
 };
 
@@ -230,8 +254,8 @@ const validateWelcome = (value: unknown): GuardResult<S2CWelcome> => {
   }
   const featureFlags = isRecord(value.featureFlags)
     ? Object.fromEntries(
-        Object.entries(value.featureFlags).filter((entry): entry is [string, boolean] =>
-          isBoolean(entry[1])
+        Object.entries(value.featureFlags).filter(
+          (entry): entry is [string, boolean] => isBoolean(entry[1])
         )
       )
     : undefined;
@@ -256,7 +280,11 @@ const validateNetEvent = (value: unknown): GuardResult<NetEvent> => {
   if (value.kind !== 'spring' && value.kind !== 'break') {
     return fail('event.kind invalid');
   }
-  if (!isFiniteNumber(value.x) || !isFiniteNumber(value.y) || !isFiniteNumber(value.tick)) {
+  if (
+    !isFiniteNumber(value.x) ||
+    !isFiniteNumber(value.y) ||
+    !isFiniteNumber(value.tick)
+  ) {
     return fail('event numeric fields invalid');
   }
   return ok({
@@ -344,7 +372,9 @@ const validateSnapshot = (value: unknown): GuardResult<S2CSnapshot> => {
       if (!isFiniteNumber(value.stats.droppedSnapshots)) {
         return fail('snapshot.stats.droppedSnapshots must be number');
       }
-      stats.droppedSnapshots = clonePrimitive(value.stats.droppedSnapshots as number);
+      stats.droppedSnapshots = clonePrimitive(
+        value.stats.droppedSnapshots as number
+      );
     }
   }
   const payload: S2CSnapshot = {
@@ -367,7 +397,9 @@ const validateSnapshot = (value: unknown): GuardResult<S2CSnapshot> => {
   return ok(payload);
 };
 
-const validateStartCountdown = (value: unknown): GuardResult<S2CStartCountdown> => {
+const validateStartCountdown = (
+  value: unknown
+): GuardResult<S2CStartCountdown> => {
   if (!isRecord(value)) {
     return fail('start_countdown payload must be object');
   }
@@ -458,7 +490,11 @@ const validateFinish = (value: unknown): GuardResult<S2CFinish> => {
   if (!isRecord(value)) {
     return fail('finish payload must be object');
   }
-  if (value.reason !== 'room_closed' && value.reason !== 'timeout' && value.reason !== 'error') {
+  if (
+    value.reason !== 'room_closed' &&
+    value.reason !== 'timeout' &&
+    value.reason !== 'error'
+  ) {
     return fail('finish.reason invalid');
   }
   return ok({ reason: value.reason });
@@ -473,7 +509,11 @@ const validatePlayerPresence = (
   if (!isString(value.id)) {
     return fail('player_presence.id must be string');
   }
-  if (value.state !== 'active' && value.state !== 'disconnected' && value.state !== 'left') {
+  if (
+    value.state !== 'active' &&
+    value.state !== 'disconnected' &&
+    value.state !== 'left'
+  ) {
     return fail('player_presence.state invalid');
   }
   return ok({ id: value.id, state: value.state });
@@ -523,7 +563,9 @@ const buildEnvelope = <T, TType extends ServerMessageType>(
   payload,
 });
 
-export const parseServerEnvelope = (raw: unknown): GuardResult<ServerEnvelope> => {
+export const parseServerEnvelope = (
+  raw: unknown
+): GuardResult<ServerEnvelope> => {
   if (!isRecord(raw)) {
     return fail('Envelope must be object');
   }
@@ -531,7 +573,9 @@ export const parseServerEnvelope = (raw: unknown): GuardResult<ServerEnvelope> =
     return fail('Envelope.type must be string');
   }
   if (raw.pv !== PROTOCOL_PV) {
-    return fail(`Envelope.pv ${String(raw.pv)} mismatches client pv ${PROTOCOL_PV}`);
+    return fail(
+      `Envelope.pv ${String(raw.pv)} mismatches client pv ${PROTOCOL_PV}`
+    );
   }
   if (!isFiniteNumber(raw.seq)) {
     return fail('Envelope.seq must be number');
@@ -540,7 +584,8 @@ export const parseServerEnvelope = (raw: unknown): GuardResult<ServerEnvelope> =
     return fail('Envelope.ts must be number');
   }
 
-  const payload = 'payload' in raw ? (raw as Record<string, unknown>).payload : undefined;
+  const payload =
+    'payload' in raw ? (raw as Record<string, unknown>).payload : undefined;
   const type = raw.type as ServerMessageType;
 
   switch (type) {

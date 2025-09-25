@@ -16,13 +16,55 @@ export interface CharacterOption {
 }
 
 export const CHARACTER_OPTIONS: readonly CharacterOption[] = [
-  { id: 'aurora', name: 'Aurora', tint: 0xff8a80, accent: '#ff8a80', accentSecondary: '#ff5252' },
-  { id: 'cobalt', name: 'Cobalt', tint: 0x82b1ff, accent: '#82b1ff', accentSecondary: '#448aff' },
-  { id: 'jade', name: 'Jade', tint: 0x69f0ae, accent: '#69f0ae', accentSecondary: '#00e676' },
-  { id: 'sunrise', name: 'Sunrise', tint: 0xffd740, accent: '#ffd740', accentSecondary: '#ffab00' },
-  { id: 'violet', name: 'Violet', tint: 0xb388ff, accent: '#b388ff', accentSecondary: '#7c4dff' },
-  { id: 'ember', name: 'Ember', tint: 0xff7043, accent: '#ff7043', accentSecondary: '#ff3d00' },
-  { id: 'ghost', name: 'Ghost', tint: 0xcfd8dc, accent: '#cfd8dc', accentSecondary: '#90a4ae' },
+  {
+    id: 'aurora',
+    name: 'Aurora',
+    tint: 0xff8a80,
+    accent: '#ff8a80',
+    accentSecondary: '#ff5252',
+  },
+  {
+    id: 'cobalt',
+    name: 'Cobalt',
+    tint: 0x82b1ff,
+    accent: '#82b1ff',
+    accentSecondary: '#448aff',
+  },
+  {
+    id: 'jade',
+    name: 'Jade',
+    tint: 0x69f0ae,
+    accent: '#69f0ae',
+    accentSecondary: '#00e676',
+  },
+  {
+    id: 'sunrise',
+    name: 'Sunrise',
+    tint: 0xffd740,
+    accent: '#ffd740',
+    accentSecondary: '#ffab00',
+  },
+  {
+    id: 'violet',
+    name: 'Violet',
+    tint: 0xb388ff,
+    accent: '#b388ff',
+    accentSecondary: '#7c4dff',
+  },
+  {
+    id: 'ember',
+    name: 'Ember',
+    tint: 0xff7043,
+    accent: '#ff7043',
+    accentSecondary: '#ff3d00',
+  },
+  {
+    id: 'ghost',
+    name: 'Ghost',
+    tint: 0xcfd8dc,
+    accent: '#cfd8dc',
+    accentSecondary: '#90a4ae',
+  },
 ] as const;
 
 export const DEFAULT_CHARACTER_ID: CharacterId = CHARACTER_OPTIONS[0]!.id;
@@ -31,7 +73,9 @@ export const CHARACTER_OPTION_MAP = new Map<CharacterId, CharacterOption>(
   CHARACTER_OPTIONS.map((option) => [option.id, option])
 );
 
-export function getCharacterOption(id: CharacterId | undefined): CharacterOption {
+export function getCharacterOption(
+  id: CharacterId | undefined
+): CharacterOption {
   if (!id) {
     return CHARACTER_OPTIONS[0]!;
   }

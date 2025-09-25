@@ -27,8 +27,17 @@ const netConfig = {
   },
 };
 
+type MockSocketWindow = Window & {
+  __mockSockets?: unknown[];
+  __mockSent?: unknown[];
+  __mockEmit?: (index: number, message: unknown) => boolean;
+  __mockResetSent?: () => void;
+};
+
 const injectMockSocket = async (page: import('@playwright/test').Page) => {
   await page.addInitScript(() => {
+    type Listener = (event: unknown) => void;
+
     class MockSocket {
       static CONNECTING = 0;
       static OPEN = 1;
@@ -38,7 +47,7 @@ const injectMockSocket = async (page: import('@playwright/test').Page) => {
       static sent: unknown[] = [];
       url: string;
       readyState: number;
-      private listeners: Record<string, Array<(event: any) => void>>;
+      private listeners: Record<string, Listener[]>;
 
       constructor(url: string) {
         this.url = url;
@@ -56,14 +65,14 @@ const injectMockSocket = async (page: import('@playwright/test').Page) => {
         }, 0);
       }
 
-      addEventListener(type: string, handler: (event: any) => void) {
+      addEventListener(type: string, handler: Listener) {
         const list = this.listeners[type];
         if (list && typeof handler === 'function') {
           list.push(handler);
         }
       }
 
-      removeEventListener(type: string, handler: (event: any) => void) {
+      removeEventListener(type: string, handler: Listener) {
         const list = this.listeners[type];
         if (!list) return;
         const index = list.indexOf(handler);
@@ -72,7 +81,7 @@ const injectMockSocket = async (page: import('@playwright/test').Page) => {
         }
       }
 
-      emit(type: string, event: any) {
+      emit(type: string, event: unknown) {
         const list = this.listeners[type];
         if (!list) return;
         for (const handler of [...list]) {
@@ -94,15 +103,17 @@ const injectMockSocket = async (page: import('@playwright/test').Page) => {
       }
     }
 
-    (window as unknown as { WebSocket: typeof MockSocket }).WebSocket = MockSocket as never;
-    (window as unknown as { __mockSockets: MockSocket[] }).__mockSockets = MockSocket.instances;
-    (window as unknown as { __mockSent: unknown[] }).__mockSent = MockSocket.sent;
-    (window as unknown as { __mockResetSent: () => void }).__mockResetSent = () => {
+    (window as unknown as { WebSocket: typeof MockSocket }).WebSocket =
+      MockSocket;
+    (window as MockSocketWindow).__mockSockets = MockSocket.instances;
+    (window as MockSocketWindow).__mockSent = MockSocket.sent;
+    (window as MockSocketWindow).__mockResetSent = () => {
       MockSocket.sent.length = 0;
     };
-    (window as unknown as {
-      __mockEmit: (index: number, message: unknown) => boolean;
-    }).__mockEmit = (index: number, message: unknown) => {
+    (window as MockSocketWindow).__mockEmit = (
+      index: number,
+      message: unknown
+    ) => {
       const socket = MockSocket.instances[index];
       if (!socket) return false;
       const payload =
@@ -115,8 +126,7 @@ const injectMockSocket = async (page: import('@playwright/test').Page) => {
 
 const waitForSocket = async (page: import('@playwright/test').Page) => {
   await page.waitForFunction(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sockets = (window as any).__mockSockets;
+    const sockets = (window as MockSocketWindow).__mockSockets;
     return Array.isArray(sockets) && sockets.length > 0;
   });
 };
@@ -126,26 +136,24 @@ const emitMessage = async (
   envelope: Record<string, unknown>
 ) => {
   const delivered = await page.evaluate((msg) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (window as any).__mockEmit(0, msg);
+    const win = window as MockSocketWindow;
+    return win.__mockEmit ? win.__mockEmit(0, msg) : false;
   }, envelope);
   expect(delivered).toBe(true);
 };
 
 const resetSent = async (page: import('@playwright/test').Page) => {
   await page.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__mockResetSent();
+    (window as MockSocketWindow).__mockResetSent?.();
   });
 };
 
 const expectSentMessage = async (
   page: import('@playwright/test').Page,
-  predicate: (message: any) => boolean
+  predicate: (message: unknown) => boolean
 ) => {
-  await page.waitForFunction((fn) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sent = (window as any).__mockSent as unknown[];
+  await page.waitForFunction((fn: (message: unknown) => boolean) => {
+    const sent = (window as MockSocketWindow).__mockSent;
     return Array.isArray(sent) && sent.some((msg) => fn(msg));
   }, predicate);
 };
@@ -179,8 +187,18 @@ test('lobby countdown flow across two clients', async ({ page, context }) => {
       roomState: 'lobby' as const,
       lobby: {
         players: [
-          { id: 'p_master', name: 'Master', ready: false, role: 'master' as const },
-          { id: 'p_member', name: 'Member', ready: false, role: 'member' as const },
+          {
+            id: 'p_master',
+            name: 'Master',
+            ready: false,
+            role: 'master' as const,
+          },
+          {
+            id: 'p_member',
+            name: 'Member',
+            ready: false,
+            role: 'member' as const,
+          },
         ],
         maxPlayers: 4,
       },
@@ -205,9 +223,14 @@ test('lobby countdown flow across two clients', async ({ page, context }) => {
   const startButton = page.getByRole('button', { name: 'Start Match' });
   await expect(startButton).toBeDisabled();
 
-  const memberReadyButton = memberPage.getByRole('button', { name: /ready up/i });
+  const memberReadyButton = memberPage.getByRole('button', {
+    name: /ready up/i,
+  });
   await memberReadyButton.click();
-  await expectSentMessage(memberPage, (msg) => msg.type === 'ready_set' && msg.payload?.ready === true);
+  await expectSentMessage(
+    memberPage,
+    (msg) => msg.type === 'ready_set' && msg.payload?.ready === true
+  );
   await resetSent(memberPage);
 
   const lobbyReady = {
@@ -218,8 +241,18 @@ test('lobby countdown flow across two clients', async ({ page, context }) => {
     payload: {
       roomState: 'lobby' as const,
       players: [
-        { id: 'p_master', name: 'Master', ready: true, role: 'master' as const },
-        { id: 'p_member', name: 'Member', ready: true, role: 'member' as const },
+        {
+          id: 'p_master',
+          name: 'Master',
+          ready: true,
+          role: 'master' as const,
+        },
+        {
+          id: 'p_member',
+          name: 'Member',
+          ready: true,
+          role: 'member' as const,
+        },
       ],
       maxPlayers: 4,
     },

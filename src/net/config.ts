@@ -75,7 +75,8 @@ const pickString = (
 };
 
 const parseProtocolPv = (): Pv => {
-  const value = readString('VITE_PROTOCOL_PV') ?? readString('VITE_NET_PROTOCOL_PV');
+  const value =
+    readString('VITE_PROTOCOL_PV') ?? readString('VITE_NET_PROTOCOL_PV');
   const parsed = Number(value);
   return parsed === 1 ? 1 : 1;
 };
@@ -83,7 +84,8 @@ const parseProtocolPv = (): Pv => {
 const defaultPlayerName = 'web-player';
 const defaultClientVersion = 'web-dev';
 
-const fallbackWsUrl = env.MODE === 'development' ? 'ws://localhost:8081/v1/ws' : undefined;
+const fallbackWsUrl =
+  env.MODE === 'development' ? 'ws://localhost:8081/v1/ws' : undefined;
 const fallbackApiBase =
   env.MODE === 'development' ? 'http://localhost:8080' : undefined;
 
@@ -97,25 +99,51 @@ const apiBaseUrl = pickString(
   readString('VITE_NET_API_BASE_URL'),
   fallbackApiBase
 );
-const wsToken = pickString(readString('VITE_WS_TOKEN'), readString('VITE_NET_WS_TOKEN'));
+const wsToken = pickString(
+  readString('VITE_WS_TOKEN'),
+  readString('VITE_NET_WS_TOKEN')
+);
 
 export const NET_CFG: NetRuntimeConfig = {
   enabled: Boolean(wsUrl || apiBaseUrl),
   apiBaseUrl,
   wsUrl,
   wsToken,
-  playerName: readString('VITE_PLAYER_NAME') ?? readString('VITE_NET_PLAYER_NAME') ?? defaultPlayerName,
+  playerName:
+    readString('VITE_PLAYER_NAME') ??
+    readString('VITE_NET_PLAYER_NAME') ??
+    defaultPlayerName,
   clientVersion:
-    readString('VITE_CLIENT_VERSION') ?? readString('VITE_NET_CLIENT_VERSION') ?? defaultClientVersion,
+    readString('VITE_CLIENT_VERSION') ??
+    readString('VITE_NET_CLIENT_VERSION') ??
+    defaultClientVersion,
   device: readString('VITE_DEVICE') ?? readString('VITE_NET_DEVICE'),
   capabilities: {
-    tilt: toBool(readString('VITE_CAP_TILT') ?? readString('VITE_NET_CAP_TILT'), false),
-    vibrate: toBool(readString('VITE_CAP_VIBRATE') ?? readString('VITE_NET_CAP_VIBRATE'), true),
+    tilt: toBool(
+      readString('VITE_CAP_TILT') ?? readString('VITE_NET_CAP_TILT'),
+      false
+    ),
+    vibrate: toBool(
+      readString('VITE_CAP_VIBRATE') ?? readString('VITE_NET_CAP_VIBRATE'),
+      true
+    ),
   },
-  flushIntervalMs: Math.max(16, toNumber(readString('VITE_FLUSH_MS') ?? readString('VITE_NET_FLUSH_MS'), 50)),
-  pingIntervalMs: Math.max(1000, toNumber(readString('VITE_PING_MS') ?? readString('VITE_NET_PING_MS'), 5000)),
+  flushIntervalMs: Math.max(
+    16,
+    toNumber(readString('VITE_FLUSH_MS') ?? readString('VITE_NET_FLUSH_MS'), 50)
+  ),
+  pingIntervalMs: Math.max(
+    1000,
+    toNumber(readString('VITE_PING_MS') ?? readString('VITE_NET_PING_MS'), 5000)
+  ),
   debug: toBool(readString('VITE_NET_DEBUG'), env.MODE === 'development'),
-  maxPlayers: Math.max(1, toNumber(readString('VITE_MAX_PLAYERS') ?? readString('VITE_NET_MAX_PLAYERS'), 4)),
+  maxPlayers: Math.max(
+    1,
+    toNumber(
+      readString('VITE_MAX_PLAYERS') ?? readString('VITE_NET_MAX_PLAYERS'),
+      4
+    )
+  ),
   defaultRegion: readString('VITE_REGION') ?? readString('VITE_NET_REGION'),
   defaultMode: readString('VITE_MODE') ?? readString('VITE_NET_MODE'),
   protocolPv: parseProtocolPv(),
