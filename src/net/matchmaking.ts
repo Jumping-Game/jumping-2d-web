@@ -86,15 +86,20 @@ export const createRoom = async (
   const payload: Record<string, unknown> = {
     name: params.name,
   };
-  if (params.region ?? NET_CFG.defaultRegion) {
-    payload.region = params.region ?? NET_CFG.defaultRegion;
+  const region = params.region ?? NET_CFG.defaultRegion;
+  if (region) {
+    payload.region = region;
   }
-  if (params.maxPlayers ?? NET_CFG.maxPlayers) {
-    payload.maxPlayers = params.maxPlayers ?? NET_CFG.maxPlayers;
+  const maxPlayers = params.maxPlayers ?? NET_CFG.maxPlayers;
+  if (typeof maxPlayers === 'number') {
+    payload.maxPlayers = maxPlayers;
   }
-  if (params.mode ?? NET_CFG.defaultMode) {
-    payload.mode = params.mode ?? NET_CFG.defaultMode;
-  }
+  const preferredMode = params.mode ?? NET_CFG.defaultMode;
+  const mode =
+    typeof preferredMode === 'string' && preferredMode.trim().length > 0
+      ? preferredMode.trim()
+      : 'endless';
+  payload.mode = mode;
 
   const response = await fetch(buildUrl('/v1/rooms', options?.baseUrl), {
     method: 'POST',
