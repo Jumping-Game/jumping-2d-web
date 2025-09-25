@@ -54,7 +54,7 @@ export function testLanding(player: Player, platform: Platform): boolean {
   const top = platform.position.y + platform.height;
   const feet = player.getFeetY();
   const prevFeet = player.getPreviousFeetY();
-  const wasAbove = prevFeet - CFG.player.footOffset >= top;
+  const wasAbove = prevFeet >= top;
   const isBelow = feet <= top;
   if (!wasAbove || !isBelow) {
     return false;
