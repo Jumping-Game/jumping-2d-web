@@ -500,11 +500,38 @@ export class GameScene extends Phaser.Scene {
     this.handleNetLatency(this.netLatencyMs);
   }
 
-  private handleNetStart(_start: S2CStart): void {
+  private handleNetStart(start: S2CStart): void {
     if (!this.netClient.enabled) {
       return;
     }
     this.netRoomState = 'running';
+    this.playerNames = new Map(
+      start.players.map((player) => [player.id, player.name])
+    );
+    const rosterIds = new Set<string>();
+    for (const player of start.players) {
+      rosterIds.add(player.id);
+      if (player.id === this.localPlayerId) {
+        continue;
+      }
+      const remote = this.getOrCreateRemotePlayer(player.id);
+      remote.alive = false;
+      remote.lastSeen = 0;
+      remote.sprite.setVisible(false);
+      remote.label.setVisible(false);
+    }
+    for (const [id, remote] of this.remotePlayers) {
+      if (id === this.localPlayerId || rosterIds.has(id)) {
+        continue;
+      }
+      remote.sprite.destroy();
+      remote.label.destroy();
+      this.remotePlayers.delete(id);
+    }
+    const state = useNetStore.getState();
+    this.characterSelections = state.characterSelections;
+    this.applyCharacterStyles();
+    this.refreshPlayerLabels();
     this.hideLobbyUI();
     this.clock.resume();
   }
@@ -673,7 +700,8 @@ export class GameScene extends Phaser.Scene {
         .image(0, 0, TextureKeys.Player)
         .setOrigin(0.5, 1)
         .setDepth(9)
-        .setAlpha(0.85);
+        .setAlpha(0.85)
+        .setVisible(false);
       const label = this.add
         .text(0, 0, this.playerNames.get(id) ?? 'Player', {
           fontFamily: 'Inter, system-ui, sans-serif',
@@ -685,7 +713,8 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5, 1.8)
         .setDepth(9)
         .setShadow(0, 2, 'rgba(0,0,0,0.6)', 2)
-        .setAlpha(0.85);
+        .setAlpha(0.85)
+        .setVisible(false);
       state = {
         sprite,
         label,
@@ -693,7 +722,7 @@ export class GameScene extends Phaser.Scene {
         y: 0,
         vx: 0,
         vy: 0,
-        alive: true,
+        alive: false,
         lastSeen: 0,
       };
       this.remotePlayers.set(id, state);
