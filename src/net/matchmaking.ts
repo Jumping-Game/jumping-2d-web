@@ -42,6 +42,7 @@ interface RequestOptions {
 }
 
 interface LeaveRoomOptions extends RequestOptions {
+  playerId: string;
   reason?: string;
 }
 
@@ -137,11 +138,16 @@ export const joinRoom = async (
 
 export const leaveRoom = async (
   roomId: string,
-  options?: LeaveRoomOptions
+  options: LeaveRoomOptions
 ): Promise<void> => {
-  const payload = options?.reason ? { reason: options.reason } : {};
+  const payload: { playerId: string; reason?: string } = {
+    playerId: options.playerId,
+  };
+  if (options.reason) {
+    payload.reason = options.reason;
+  }
   const response = await fetch(
-    buildUrl(`/v1/rooms/${encodeURIComponent(roomId)}/leave`, options?.baseUrl),
+    buildUrl(`/v1/rooms/${encodeURIComponent(roomId)}/leave`, options.baseUrl),
     {
       method: 'POST',
       headers: {
