@@ -633,9 +633,15 @@ export class GameScene extends Phaser.Scene {
     if (!this.netSession?.apiBaseUrl || !this.netSession.roomId) {
       return;
     }
+    const playerId =
+      this.netClient?.playerId ?? useNetStore.getState().playerId;
+    if (!playerId) {
+      return;
+    }
     try {
       await leaveRoom(this.netSession.roomId, {
         baseUrl: this.netSession.apiBaseUrl,
+        playerId,
       });
     } catch (error) {
       if (NET_CFG.debug) {

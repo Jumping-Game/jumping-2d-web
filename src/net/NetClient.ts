@@ -442,13 +442,15 @@ export class NetClient {
           }
         });
         break;
-      default:
+      default: {
         if (this.opts.debug) {
           const unhandled = envelope as ServerEnvelope;
           console.warn('[NetClient] Unhandled message type', unhandled.type);
         }
         const exhaustiveCheck: never = envelope;
         void exhaustiveCheck;
+        break;
+      }
     }
   }
 
