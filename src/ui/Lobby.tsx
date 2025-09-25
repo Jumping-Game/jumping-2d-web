@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { shallow } from 'zustand/shallow';
+import { useShallow } from 'zustand/react/shallow';
 import playerSvgUrl from '../assets/images/player.svg';
 import {
   CHARACTER_OPTIONS,
@@ -183,20 +183,16 @@ export const Lobby: React.FC<LobbyProps> = ({
   onSelectCharacter,
 }) => {
   const state = useNetStore(
-    useCallback(
-      (s) => ({
-        playerId: s.playerId,
-        roomId: s.roomId,
-        role: s.role,
-        roomState: s.roomState,
-        players: s.players,
-        countdown: s.countdown,
-        lobbyMaxPlayers: s.lobbyMaxPlayers,
-        characterSelections: s.characterSelections,
-      }),
-      []
-    ),
-    shallow
+    useShallow((s) => ({
+      playerId: s.playerId,
+      roomId: s.roomId,
+      role: s.role,
+      roomState: s.roomState,
+      players: s.players,
+      countdown: s.countdown,
+      lobbyMaxPlayers: s.lobbyMaxPlayers,
+      characterSelections: s.characterSelections,
+    }))
   );
 
   const [now, setNow] = useState(() => Date.now());
