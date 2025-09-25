@@ -4,6 +4,11 @@ import type {
   NetRoomState,
   PlayerRole,
 } from '../net/Protocol';
+import type { CharacterId } from '../config/characters';
+import {
+  pickDefaultCharacter,
+  DEFAULT_CHARACTER_ID,
+} from '../config/characters';
 
 export interface CountdownState {
   startAtMs: number;
@@ -28,6 +33,7 @@ export interface NetStoreState {
   lobbyMaxPlayers?: number;
   countdown: CountdownState | null;
   net: NetMetricsState;
+  characterSelections: Record<string, CharacterId>;
   setIdentity: (params: {
     playerId: string;
     roomId: string;
@@ -38,6 +44,7 @@ export interface NetStoreState {
   setLobby: (players: LobbyPlayer[], maxPlayers?: number) => void;
   setCountdown: (countdown: CountdownState | null) => void;
   updateNetMetrics: (metrics: Partial<NetMetricsState>) => void;
+  setCharacterSelection: (playerId: string, characterId: CharacterId) => void;
   resetCountdown: () => void;
   reset: () => void;
 }
@@ -57,6 +64,7 @@ export const useNetStore = create<NetStoreState>((set) => ({
   lobbyMaxPlayers: undefined,
   countdown: null,
   net: { ...initialNet },
+  characterSelections: {},
   setIdentity: ({ playerId, roomId, resumeToken }) =>
     set((state) => ({
       ...state,
@@ -79,12 +87,36 @@ export const useNetStore = create<NetStoreState>((set) => ({
       ...state,
       players,
       lobbyMaxPlayers: maxPlayers ?? state.lobbyMaxPlayers,
+      characterSelections: reconcileCharacterSelections(
+        state.characterSelections,
+        players
+      ),
     })),
   setCountdown: (countdown) =>
     set((state) => ({
       ...state,
       countdown,
     })),
+  setCharacterSelection: (playerId, characterId) =>
+    set((state) => {
+      const playerExists = state.players.some((player) => player.id === playerId);
+      if (!playerExists) {
+        return state;
+      }
+      const inUseByOther = Object.entries(state.characterSelections).some(
+        ([id, existing]) => id !== playerId && existing === characterId
+      );
+      if (inUseByOther) {
+        return state;
+      }
+      return {
+        ...state,
+        characterSelections: {
+          ...state.characterSelections,
+          [playerId]: characterId,
+        },
+      };
+    }),
   resetCountdown: () =>
     set((state) => ({
       ...state,
@@ -106,7 +138,28 @@ export const useNetStore = create<NetStoreState>((set) => ({
       lobbyMaxPlayers: undefined,
       countdown: null,
       net: { ...initialNet },
+      characterSelections: {},
     })),
 }));
+
+const reconcileCharacterSelections = (
+  current: Record<string, CharacterId>,
+  players: LobbyPlayer[]
+): Record<string, CharacterId> => {
+  const next: Record<string, CharacterId> = {};
+  const working: Record<string, CharacterId> = {};
+  for (const player of players) {
+    const existing = current[player.id];
+    if (existing) {
+      next[player.id] = existing;
+      working[player.id] = existing;
+      continue;
+    }
+    const assigned = pickDefaultCharacter(player.id, working);
+    next[player.id] = assigned ?? DEFAULT_CHARACTER_ID;
+    working[player.id] = next[player.id];
+  }
+  return next;
+};
 
 export const getNetStore = (): NetStoreState => useNetStore.getState();

@@ -13,6 +13,8 @@ import { SceneKeys } from './SceneKeys';
 import { saveHighScore, loadHighScore } from './Storage';
 import { getUIManager } from '../ui';
 import { NetClient } from '../net/NetClient';
+import type { CharacterId } from '../config/characters';
+import { getCharacterOption } from '../config/characters';
 import {
   NetEvent,
   NetRoomState,
@@ -41,6 +43,7 @@ interface GameSceneData {
 
 interface RemotePlayerState {
   sprite: Phaser.GameObjects.Image;
+  label: Phaser.GameObjects.Text;
   x: number;
   y: number;
   vx: number;
@@ -63,19 +66,24 @@ export class GameScene extends Phaser.Scene {
   >();
   private readonly powerupSprites = new Map<number, Phaser.GameObjects.Image>();
   private playerSprite!: Phaser.GameObjects.Image;
+  private playerLabel!: Phaser.GameObjects.Text;
   private bgFar!: Phaser.GameObjects.TileSprite;
   private bgMid!: Phaser.GameObjects.TileSprite;
   private bgNear!: Phaser.GameObjects.TileSprite;
   private pendingEvents: SimEventType[] = [];
   private netClient!: NetClient;
   private readonly remotePlayers = new Map<string, RemotePlayerState>();
+  private playerNames = new Map<string, string>();
   private localPlayerId?: string;
   private netLatencyMs = Number.NaN;
   private netSession?: MatchSessionConfig;
   private netRoomState: NetRoomState = 'running';
   private unsubscribeRoomState?: () => void;
+  private unsubscribeCharacters?: () => void;
+  private unsubscribePlayers?: () => void;
   private lobbyVisible = false;
   private leavingRoom = false;
+  private characterSelections: Record<string, CharacterId> = {};
   private readonly handleReadyToggle = (ready: boolean): void => {
     if (!this.netClient?.enabled) {
       return;
@@ -163,6 +171,19 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(10);
 
+    this.playerLabel = this.add
+      .text(0, 0, 'You', {
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '16px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5, 1.8)
+      .setDepth(11)
+      .setShadow(0, 2, 'rgba(0,0,0,0.6)', 2)
+      .setAlpha(0.9);
+
     this.inputManager = new InputManager(this);
     this.hud = new Hud(this, {
       showFps: import.meta.env.DEV,
@@ -233,6 +254,10 @@ export class GameScene extends Phaser.Scene {
   private onShutdown(): void {
     this.unsubscribeRoomState?.();
     this.unsubscribeRoomState = undefined;
+    this.unsubscribeCharacters?.();
+    this.unsubscribeCharacters = undefined;
+    this.unsubscribePlayers?.();
+    this.unsubscribePlayers = undefined;
     if (this.lobbyVisible) {
       getUIManager().hide();
       this.lobbyVisible = false;
@@ -242,7 +267,11 @@ export class GameScene extends Phaser.Scene {
     this.powerupSprites.forEach((sprite) => sprite.destroy());
     this.platformSprites.clear();
     this.powerupSprites.clear();
-    this.remotePlayers.forEach((remote) => remote.sprite.destroy());
+    this.playerLabel?.destroy();
+    this.remotePlayers.forEach((remote) => {
+      remote.sprite.destroy();
+      remote.label.destroy();
+    });
     this.remotePlayers.clear();
     void this.sendLeaveRequest();
     this.netClient?.destroy();
@@ -319,6 +348,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const state = useNetStore.getState();
+    this.characterSelections = state.characterSelections;
+    this.playerNames = new Map(
+      state.players.map((player) => [player.id, player.name])
+    );
+    this.applyCharacterStyles();
+    this.refreshPlayerLabels();
     this.netRoomState = state.roomState;
     if (this.netRoomState !== 'running') {
       this.showLobbyUI();
@@ -328,6 +363,23 @@ export class GameScene extends Phaser.Scene {
       (s) => s.roomState,
       (roomState, previousRoomState) =>
         this.onRoomStateChanged(roomState, previousRoomState)
+    );
+    this.unsubscribeCharacters = useNetStore.subscribe(
+      (s) => s.characterSelections,
+      (selections) => {
+        this.characterSelections = selections;
+        this.applyCharacterStyles();
+      }
+    );
+    this.unsubscribePlayers = useNetStore.subscribe(
+      (s) => s.players,
+      (players) => {
+        this.playerNames = new Map(
+          players.map((player) => [player.id, player.name])
+        );
+        this.applyCharacterStyles();
+        this.refreshPlayerLabels();
+      }
     );
   }
 
@@ -349,6 +401,43 @@ export class GameScene extends Phaser.Scene {
       this.showLobbyUI();
       this.clock.pause();
       this.remotePlayers.forEach((remote) => remote.sprite.setVisible(false));
+      this.remotePlayers.forEach((remote) => remote.label.setVisible(false));
+    }
+  }
+
+  private applyCharacterStyles(): void {
+    const toHex = (value: number): string =>
+      `#${value.toString(16).padStart(6, '0')}`;
+    if (this.playerSprite && this.playerLabel) {
+      const localOption = getCharacterOption(
+        this.localPlayerId ? this.characterSelections[this.localPlayerId] : undefined
+      );
+      this.playerSprite.setTint(localOption.tint);
+      this.playerLabel.setColor(toHex(localOption.tint));
+    }
+    for (const [id, remote] of this.remotePlayers) {
+      if (!remote) {
+        continue;
+      }
+      const option = getCharacterOption(this.characterSelections[id]);
+      remote.sprite.setTint(option.tint);
+      remote.label.setColor(toHex(option.tint));
+    }
+  }
+
+  private refreshPlayerLabels(): void {
+    if (this.playerLabel) {
+      const name = this.localPlayerId
+        ? this.playerNames.get(this.localPlayerId) ?? 'You'
+        : 'You';
+      this.playerLabel.setText(name);
+    }
+    for (const [id, remote] of this.remotePlayers) {
+      if (!remote) {
+        continue;
+      }
+      const name = this.playerNames.get(id) ?? 'Player';
+      remote.label.setText(name);
     }
   }
 
@@ -456,12 +545,16 @@ export class GameScene extends Phaser.Scene {
         state.alive = true;
         state.sprite.setAlpha(0.85);
         state.sprite.setVisible(true);
+        state.label.setAlpha(0.85);
+        state.label.setVisible(true);
         break;
       case 'disconnected':
         state.sprite.setAlpha(0.4);
+        state.label.setAlpha(0.4);
         break;
       case 'left':
         state.sprite.destroy();
+        state.label.destroy();
         this.remotePlayers.delete(presence.id);
         break;
     }
@@ -547,10 +640,22 @@ export class GameScene extends Phaser.Scene {
         .image(0, 0, TextureKeys.Player)
         .setOrigin(0.5, 1)
         .setDepth(9)
-        .setTint(0x66ccff)
+        .setAlpha(0.85);
+      const label = this.add
+        .text(0, 0, this.playerNames.get(id) ?? 'Player', {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: '14px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5, 1.8)
+        .setDepth(9)
+        .setShadow(0, 2, 'rgba(0,0,0,0.6)', 2)
         .setAlpha(0.85);
       state = {
         sprite,
+        label,
         x: 0,
         y: 0,
         vx: 0,
@@ -559,6 +664,8 @@ export class GameScene extends Phaser.Scene {
         lastSeen: 0,
       };
       this.remotePlayers.set(id, state);
+      this.applyCharacterStyles();
+      this.refreshPlayerLabels();
     }
     return state;
   }
@@ -575,6 +682,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (now - remote.lastSeen > staleMs) {
         remote.sprite.setVisible(false);
+        remote.label.setVisible(false);
       }
     }
   }
