@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { shallow } from 'zustand/shallow';
 import playerSvgUrl from '../assets/images/player.svg';
 import {
   CHARACTER_OPTIONS,
@@ -194,7 +195,8 @@ export const Lobby: React.FC<LobbyProps> = ({
         characterSelections: s.characterSelections,
       }),
       []
-    )
+    ),
+    shallow
   );
 
   const [now, setNow] = useState(() => Date.now());
