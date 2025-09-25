@@ -548,6 +548,9 @@ export class GameScene extends Phaser.Scene {
       state.sprite.setPosition(Math.round(state.x), Math.round(-state.y));
       state.sprite.setVisible(state.alive);
       state.sprite.setAlpha(state.alive ? 0.85 : 0.3);
+      state.label.setPosition(Math.round(state.x), Math.round(-state.y));
+      state.label.setVisible(state.alive);
+      state.label.setAlpha(state.alive ? 0.85 : 0.3);
     }
 
     this.applyNetEvents(snapshot.events);
