@@ -471,7 +471,9 @@ export class NetClient {
     });
     store.setRole(welcome.role);
     store.setRoomState(welcome.roomState);
-    store.setLobby(welcome.lobby.players, welcome.lobby.maxPlayers);
+    const lobbyPlayers = welcome.lobby?.players ?? [];
+    const lobbyMaxPlayers = welcome.lobby?.maxPlayers;
+    store.setLobby(lobbyPlayers, lobbyMaxPlayers);
     store.resetCountdown();
     store.updateNetMetrics({
       skew: 0,
@@ -482,8 +484,10 @@ export class NetClient {
 
     const lobbyState: S2CLobbyState = {
       roomState: welcome.roomState,
-      players: welcome.lobby.players,
-      maxPlayers: welcome.lobby.maxPlayers,
+      players: lobbyPlayers,
+      ...(lobbyMaxPlayers !== undefined
+        ? { maxPlayers: lobbyMaxPlayers }
+        : {}),
     };
     this.lobbyHandlers.forEach((cb) => {
       try {
@@ -557,6 +561,14 @@ export class NetClient {
     this.inputBuffer.length = 0;
     const store = this.store;
     store.setRoomState('running');
+    store.setLobby(start.players);
+    if (this.playerId) {
+      const self = start.players.find((player) => player.id === this.playerId);
+      if (self && self.role !== this.role) {
+        this.role = self.role;
+        store.setRole(self.role);
+      }
+    }
     store.resetCountdown();
     store.updateNetMetrics({ skew: this.serverSkewMs });
     this.startHandlers.forEach((cb) => {
