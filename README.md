@@ -105,6 +105,8 @@ Sky Hopper includes a realtime multiplayer client aligned with [`NETWORK_PROTOCO
 - `src/net/NetClient.ts` handles the WebSocket lifecycle (join → welcome → start), batches inputs, maintains ping/pong timers, and surfaces `snapshot`, `player_presence`, and `finish` events.
 - `GameScene` renders remote competitors using authoritative snapshots while continuing the deterministic local simulation.
 - The HUD shows the current round-trip time (RTT) or connection state.
+- `src/net/matchmaking.ts` wraps the REST endpoints (`/v1/rooms`, `/join`, `/leave`, `/status`) defined in [`NETWORK_PROTOCOL.md`](NETWORK_PROTOCOL.md) for room creation, joining, and teardown.
+- The main menu presents quick solo runs plus Create/Join flows that call the matchmaking API and automatically pass the returned `wsUrl`/`wsToken` into the realtime client.
 
 ### Configuring the client
 
@@ -112,6 +114,10 @@ Networking is configured via Vite env vars (e.g. `.env.local`). When no WebSocke
 
 | Env var | Purpose |
 | ------- | ------- |
+| `VITE_NET_API_BASE_URL` | HTTPS base for REST matchmaking, e.g. `https://api.example.com` |
+| `VITE_NET_REGION` | Default region used when creating rooms |
+| `VITE_NET_MODE` | Default game mode sent to `POST /v1/rooms` |
+| `VITE_NET_MAX_PLAYERS` | Default lobby size for room creation (default `4`) |
 | `VITE_NET_WS_URL` | WebSocket endpoint, e.g. `wss://rt.example.com/v1/ws` |
 | `VITE_NET_WS_TOKEN` | Optional auth token appended as `?token=` |
 | `VITE_NET_PLAYER_NAME` | Display name sent in the join payload |
@@ -125,9 +131,11 @@ Networking is configured via Vite env vars (e.g. `.env.local`). When no WebSocke
 Example `.env.local`:
 
 ```ini
+VITE_NET_API_BASE_URL=https://api.dev.example.com
 VITE_NET_WS_URL=wss://rt.dev.example.com/v1/ws
 VITE_NET_WS_TOKEN=eyJhbGc...
 VITE_NET_PLAYER_NAME=dev-player
+VITE_NET_REGION=ap-southeast-1
 VITE_NET_CLIENT_VERSION=web-1.0.0
 ```
 
