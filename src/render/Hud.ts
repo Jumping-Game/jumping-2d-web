@@ -10,6 +10,7 @@ export class Hud {
   private readonly highScoreText: Phaser.GameObjects.Text;
   private readonly fpsText: Phaser.GameObjects.Text;
   private readonly pauseButton: Phaser.GameObjects.Text;
+  private readonly netStatusText: Phaser.GameObjects.Text;
 
   constructor(scene: Scene, options: HudOptions = {}) {
     this.scene = scene;
@@ -46,6 +47,15 @@ export class Hud {
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setVisible(options.showFps ?? false);
+
+    this.netStatusText = scene.add
+      .text(scene.scale.width - 24, 72, '', {
+        ...style,
+        fontSize: '12px',
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
   }
 
   update(score: number, highScore: number, fps: number): void {
@@ -58,5 +68,14 @@ export class Hud {
 
   onPause(handler: () => void): void {
     this.scene.events.on('hud-pause', handler);
+  }
+
+  setNetStatus(status: string): void {
+    if (!status) {
+      this.netStatusText.setVisible(false);
+      return;
+    }
+    this.netStatusText.setText(status);
+    this.netStatusText.setVisible(true);
   }
 }
