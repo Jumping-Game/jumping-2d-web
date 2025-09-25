@@ -116,6 +116,22 @@ export class GameScene extends Phaser.Scene {
     this.scene.start(SceneKeys.Menu);
   };
 
+  private readonly handleCharacterSelect = (characterId: CharacterId): void => {
+    if (!this.netClient?.enabled) {
+      return;
+    }
+    const state = useNetStore.getState();
+    const playerId = state.playerId;
+    if (!playerId) {
+      return;
+    }
+    const changed = state.setCharacterSelection(playerId, characterId);
+    if (!changed) {
+      return;
+    }
+    this.netClient.selectCharacter(characterId);
+  };
+
   constructor() {
     super(SceneKeys.Game);
   }
@@ -410,7 +426,9 @@ export class GameScene extends Phaser.Scene {
       `#${value.toString(16).padStart(6, '0')}`;
     if (this.playerSprite && this.playerLabel) {
       const localOption = getCharacterOption(
-        this.localPlayerId ? this.characterSelections[this.localPlayerId] : undefined
+        this.localPlayerId
+          ? this.characterSelections[this.localPlayerId]
+          : undefined
       );
       this.playerSprite.setTint(localOption.tint);
       this.playerLabel.setColor(toHex(localOption.tint));
@@ -428,7 +446,7 @@ export class GameScene extends Phaser.Scene {
   private refreshPlayerLabels(): void {
     if (this.playerLabel) {
       const name = this.localPlayerId
-        ? this.playerNames.get(this.localPlayerId) ?? 'You'
+        ? (this.playerNames.get(this.localPlayerId) ?? 'You')
         : 'You';
       this.playerLabel.setText(name);
     }
@@ -450,6 +468,7 @@ export class GameScene extends Phaser.Scene {
       onReadyToggle: this.handleReadyToggle,
       onStartMatch: this.handleStartMatch,
       onLeaveRoom: this.handleLeaveLobby,
+      onSelectCharacter: this.handleCharacterSelect,
     });
     this.lobbyVisible = true;
   }
@@ -476,7 +495,7 @@ export class GameScene extends Phaser.Scene {
     this.handleNetLatency(this.netLatencyMs);
   }
 
-  private handleNetStart(start: S2CStart): void {
+  private handleNetStart(_start: S2CStart): void {
     if (!this.netClient.enabled) {
       return;
     }
@@ -485,7 +504,7 @@ export class GameScene extends Phaser.Scene {
     this.clock.resume();
   }
 
-  private handleNetStartCountdown(countdown: S2CStartCountdown): void {
+  private handleNetStartCountdown(_countdown: S2CStartCountdown): void {
     if (!this.netClient.enabled) {
       return;
     }

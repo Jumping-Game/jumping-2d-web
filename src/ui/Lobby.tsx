@@ -12,6 +12,7 @@ interface LobbyProps {
   onToggleReady?: (ready: boolean) => void;
   onStart?: () => void;
   onLeave?: () => void;
+  onSelectCharacter?: (characterId: CharacterId) => void;
 }
 
 interface PlayerSummary {
@@ -165,9 +166,9 @@ const PlayerCard: React.FC<{ player: PlayerSummary }> = ({ player }) => {
         }}
       />
       <div style={{ display: 'flex', gap: '8px' }}>
-        <span style={readyBadgeStyle(player.ready)}>{
-          player.ready ? 'Ready' : 'Not Ready'
-        }</span>
+        <span style={readyBadgeStyle(player.ready)}>
+          {player.ready ? 'Ready' : 'Not Ready'}
+        </span>
         <span style={roleBadgeStyle(player.role)}>{player.role}</span>
       </div>
     </div>
@@ -178,6 +179,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   onToggleReady,
   onStart,
   onLeave,
+  onSelectCharacter,
 }) => {
   const state = useNetStore(
     useCallback(
@@ -194,8 +196,6 @@ export const Lobby: React.FC<LobbyProps> = ({
       []
     )
   );
-
-  const selectCharacter = useNetStore((s) => s.setCharacterSelection);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -296,15 +296,15 @@ export const Lobby: React.FC<LobbyProps> = ({
 
   const handleCharacterSelect = useCallback(
     (characterId: CharacterId) => {
-      if (!state.playerId || !selectCharacter) {
+      if (!state.playerId || !onSelectCharacter) {
         return;
       }
       if (characterId === myCharacterId) {
         return;
       }
-      selectCharacter(state.playerId, characterId);
+      onSelectCharacter(characterId);
     },
-    [myCharacterId, selectCharacter, state.playerId]
+    [myCharacterId, onSelectCharacter, state.playerId]
   );
 
   return (
@@ -314,13 +314,25 @@ export const Lobby: React.FC<LobbyProps> = ({
           <div style={{ textAlign: 'left' }}>
             <h2 style={{ margin: 0, fontSize: '28px' }}>Waiting Room</h2>
             <div style={{ opacity: 0.75, fontSize: '14px' }}>
-              Room ID: <span style={{ fontFamily: 'monospace' }}>{state.roomId ?? '—'}</span>
+              Room ID:{' '}
+              <span style={{ fontFamily: 'monospace' }}>
+                {state.roomId ?? '—'}
+              </span>
             </div>
           </div>
-          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div
+            style={{
+              textAlign: 'right',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}
+          >
             <div style={{ fontSize: '14px', opacity: 0.75 }}>Role</div>
             <div style={{ fontWeight: 600 }}>{state.role.toUpperCase()}</div>
-            <span style={{ fontSize: '12px', opacity: 0.6 }}>Slots {roomCaption}</span>
+            <span style={{ fontSize: '12px', opacity: 0.6 }}>
+              Slots {roomCaption}
+            </span>
           </div>
         </div>
 
@@ -334,7 +346,13 @@ export const Lobby: React.FC<LobbyProps> = ({
           }}
         >
           <div style={stageStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
               <div style={{ fontWeight: 600 }}>Players</div>
               <div style={{ fontSize: '12px', opacity: 0.6 }}>{statusText}</div>
             </div>
@@ -344,7 +362,9 @@ export const Lobby: React.FC<LobbyProps> = ({
               ))}
             </div>
             {players.length === 0 && (
-              <div style={{ fontSize: '14px', opacity: 0.6 }}>Waiting for players…</div>
+              <div style={{ fontSize: '14px', opacity: 0.6 }}>
+                Waiting for players…
+              </div>
             )}
           </div>
 
@@ -369,13 +389,16 @@ export const Lobby: React.FC<LobbyProps> = ({
               >
                 {CHARACTER_OPTIONS.map((option) => {
                   const active = option.id === myCharacterId;
-                  const takenByOther = charactersInUse.has(option.id) && !active;
+                  const takenByOther =
+                    charactersInUse.has(option.id) && !active;
                   return (
                     <button
                       key={option.id}
                       type="button"
                       onClick={() => handleCharacterSelect(option.id)}
-                      disabled={takenByOther || !state.playerId}
+                      disabled={
+                        takenByOther || !state.playerId || !onSelectCharacter
+                      }
                       style={characterOptionButton(
                         active,
                         takenByOther || !state.playerId,
@@ -460,7 +483,13 @@ export const Lobby: React.FC<LobbyProps> = ({
               }}
             >
               <div style={{ fontSize: '14px', opacity: 0.8 }}>{statusText}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                }}
+              >
                 {state.role === 'member' && onToggleReady && (
                   <button
                     type="button"

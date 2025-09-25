@@ -1,4 +1,5 @@
 import type { PlayerInput } from '../core/Types';
+import type { CharacterId } from '../config/characters';
 
 export type Pv = 1;
 export const PROTOCOL_PV: Pv = 1;
@@ -10,7 +11,8 @@ export type ClientMessageType =
   | 'ping'
   | 'reconnect'
   | 'ready_set'
-  | 'start_request';
+  | 'start_request'
+  | 'character_select';
 
 export type ServerMessageType =
   | 'welcome'
@@ -71,6 +73,7 @@ export interface LobbyPlayer {
   name: string;
   ready: boolean;
   role: PlayerRole;
+  characterId?: CharacterId;
 }
 
 export interface LobbySnapshot {
@@ -123,6 +126,10 @@ export interface C2SReadySet {
 
 export interface C2SStartRequest {
   countdownSec?: number;
+}
+
+export interface C2SCharacterSelect {
+  characterId: CharacterId;
 }
 
 // Server → Client
@@ -215,7 +222,8 @@ export type ClientEnvelope =
   | Envelope<C2SPing, 'ping'>
   | Envelope<C2SReconnect, 'reconnect'>
   | Envelope<C2SReadySet, 'ready_set'>
-  | Envelope<C2SStartRequest, 'start_request'>;
+  | Envelope<C2SStartRequest, 'start_request'>
+  | Envelope<C2SCharacterSelect, 'character_select'>;
 
 export type ServerEnvelope =
   | Envelope<S2CWelcome, 'welcome'>

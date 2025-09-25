@@ -1,14 +1,7 @@
 import { create } from 'zustand';
-import type {
-  LobbyPlayer,
-  NetRoomState,
-  PlayerRole,
-} from '../net/Protocol';
+import type { LobbyPlayer, NetRoomState, PlayerRole } from '../net/Protocol';
 import type { CharacterId } from '../config/characters';
-import {
-  pickDefaultCharacter,
-  DEFAULT_CHARACTER_ID,
-} from '../config/characters';
+import { pickDefaultCharacter } from '../config/characters';
 
 export interface CountdownState {
   startAtMs: number;
@@ -44,7 +37,10 @@ export interface NetStoreState {
   setLobby: (players: LobbyPlayer[], maxPlayers?: number) => void;
   setCountdown: (countdown: CountdownState | null) => void;
   updateNetMetrics: (metrics: Partial<NetMetricsState>) => void;
-  setCharacterSelection: (playerId: string, characterId: CharacterId) => void;
+  setCharacterSelection: (
+    playerId: string,
+    characterId: CharacterId
+  ) => boolean;
   resetCountdown: () => void;
   reset: () => void;
 }
@@ -83,24 +79,38 @@ export const useNetStore = create<NetStoreState>((set) => ({
       roomState,
     })),
   setLobby: (players, maxPlayers) =>
-    set((state) => ({
-      ...state,
-      players,
-      lobbyMaxPlayers: maxPlayers ?? state.lobbyMaxPlayers,
-      characterSelections: reconcileCharacterSelections(
+    set((state) => {
+      const assignments = reconcileCharacterSelections(
         state.characterSelections,
         players
-      ),
-    })),
+      );
+      const playersWithCharacters = players.map((player) => ({
+        ...player,
+        characterId: assignments[player.id],
+      }));
+      return {
+        ...state,
+        players: playersWithCharacters,
+        lobbyMaxPlayers: maxPlayers ?? state.lobbyMaxPlayers,
+        characterSelections: assignments,
+      };
+    }),
   setCountdown: (countdown) =>
     set((state) => ({
       ...state,
       countdown,
     })),
-  setCharacterSelection: (playerId, characterId) =>
+  setCharacterSelection: (playerId, characterId) => {
+    let changed = false;
     set((state) => {
-      const playerExists = state.players.some((player) => player.id === playerId);
+      const playerExists = state.players.some(
+        (player) => player.id === playerId
+      );
       if (!playerExists) {
+        return state;
+      }
+      const currentSelection = state.characterSelections[playerId];
+      if (currentSelection === characterId) {
         return state;
       }
       const inUseByOther = Object.entries(state.characterSelections).some(
@@ -109,14 +119,22 @@ export const useNetStore = create<NetStoreState>((set) => ({
       if (inUseByOther) {
         return state;
       }
+      changed = true;
+      const updatedSelections = {
+        ...state.characterSelections,
+        [playerId]: characterId,
+      };
+      const players = state.players.map((player) =>
+        player.id === playerId ? { ...player, characterId } : player
+      );
       return {
         ...state,
-        characterSelections: {
-          ...state.characterSelections,
-          [playerId]: characterId,
-        },
+        characterSelections: updatedSelections,
+        players,
       };
-    }),
+    });
+    return changed;
+  },
   resetCountdown: () =>
     set((state) => ({
       ...state,
@@ -147,17 +165,36 @@ const reconcileCharacterSelections = (
   players: LobbyPlayer[]
 ): Record<string, CharacterId> => {
   const next: Record<string, CharacterId> = {};
-  const working: Record<string, CharacterId> = {};
+  const used = new Set<CharacterId>();
+
+  const claim = (
+    candidate: CharacterId | undefined
+  ): CharacterId | undefined => {
+    if (!candidate) {
+      return undefined;
+    }
+    if (used.has(candidate)) {
+      return undefined;
+    }
+    used.add(candidate);
+    return candidate;
+  };
+
   for (const player of players) {
-    const existing = current[player.id];
-    if (existing) {
-      next[player.id] = existing;
-      working[player.id] = existing;
+    const preferred = claim(player.characterId);
+    if (preferred) {
+      next[player.id] = preferred;
       continue;
     }
-    const assigned = pickDefaultCharacter(player.id, working);
-    next[player.id] = assigned ?? DEFAULT_CHARACTER_ID;
-    working[player.id] = next[player.id];
+    const existing = current[player.id];
+    if (existing && !used.has(existing)) {
+      used.add(existing);
+      next[player.id] = existing;
+      continue;
+    }
+    const assigned = pickDefaultCharacter(player.id, next);
+    used.add(assigned);
+    next[player.id] = assigned;
   }
   return next;
 };

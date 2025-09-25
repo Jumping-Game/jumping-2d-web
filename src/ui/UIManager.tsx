@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { MainMenu } from './MainMenu';
 import { PauseOverlay } from './PauseOverlay';
 import { Lobby } from './Lobby';
+import type { CharacterId } from '../config/characters';
 
 type Screen = 'none' | 'menu' | 'lobby' | 'pause' | 'gameover';
 
@@ -22,6 +23,7 @@ interface Options extends MenuOptions {
   onReadyToggle?: (ready: boolean) => void;
   onStartMatch?: () => void;
   onLeaveRoom?: () => void;
+  onSelectCharacter?: (characterId: CharacterId) => void;
 }
 
 export class UIManager {
@@ -44,6 +46,7 @@ export class UIManager {
       onReadyToggle: undefined,
       onStartMatch: undefined,
       onLeaveRoom: undefined,
+      onSelectCharacter: undefined,
     };
     this.render();
   }
@@ -58,6 +61,7 @@ export class UIManager {
     onReadyToggle?: (ready: boolean) => void;
     onStartMatch?: () => void;
     onLeaveRoom?: () => void;
+    onSelectCharacter?: (characterId: CharacterId) => void;
   }) {
     this.screen = 'lobby';
     this.opts = { ...this.opts, ...options };
@@ -95,6 +99,7 @@ export class UIManager {
       onReadyToggle,
       onStartMatch,
       onLeaveRoom,
+      onSelectCharacter,
     } = this.opts;
     const screen = this.screen;
     this.root.render(
@@ -127,6 +132,7 @@ export class UIManager {
               onToggleReady={onReadyToggle}
               onStart={onStartMatch}
               onLeave={onLeaveRoom}
+              onSelectCharacter={onSelectCharacter}
             />
           )}
           {screen === 'pause' && <PauseOverlay onResume={onResume} />}

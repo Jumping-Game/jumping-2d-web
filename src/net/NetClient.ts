@@ -3,6 +3,7 @@ import {
   C2SJoin,
   C2SReadySet,
   C2SStartRequest,
+  C2SCharacterSelect,
   ClientEnvelope,
   Envelope,
   NetInputPayload,
@@ -24,6 +25,7 @@ import {
 import { parseServerEnvelope } from './guards';
 import { useNetStore } from '../state/store';
 import type { NetMetricsState } from '../state/store';
+import type { CharacterId } from '../config/characters';
 
 export interface NetClientOptions {
   url?: string;
@@ -271,6 +273,25 @@ export class NetClient {
       payload.countdownSec = Math.floor(countdownSec);
     }
     this.sendEnvelope('start_request', payload);
+  }
+
+  selectCharacter(characterId: CharacterId): void {
+    if (!this.enabled) {
+      return;
+    }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (this.opts.debug) {
+        console.warn(
+          '[NetClient] Cannot send character_select; socket not open'
+        );
+      }
+      return;
+    }
+    if (this.roomState !== 'lobby') {
+      return;
+    }
+    const payload: C2SCharacterSelect = { characterId };
+    this.sendEnvelope('character_select', payload);
   }
 
   destroy(): void {
