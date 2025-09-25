@@ -444,8 +444,11 @@ export class NetClient {
         break;
       default:
         if (this.opts.debug) {
-          console.warn('[NetClient] Unhandled message type', envelope.type);
+          const unhandled = envelope as ServerEnvelope;
+          console.warn('[NetClient] Unhandled message type', unhandled.type);
         }
+        const exhaustiveCheck: never = envelope;
+        void exhaustiveCheck;
     }
   }
 

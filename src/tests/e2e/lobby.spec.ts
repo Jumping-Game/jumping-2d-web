@@ -148,13 +148,21 @@ const resetSent = async (page: import('@playwright/test').Page) => {
   });
 };
 
+type MockSentMessage = {
+  type?: string;
+  payload?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 const expectSentMessage = async (
   page: import('@playwright/test').Page,
-  predicate: (message: unknown) => boolean
+  predicate: (message: MockSentMessage) => boolean
 ) => {
-  await page.waitForFunction((fn: (message: unknown) => boolean) => {
+  await page.waitForFunction((fn: (message: MockSentMessage) => boolean) => {
     const sent = (window as MockSocketWindow).__mockSent;
-    return Array.isArray(sent) && sent.some((msg) => fn(msg));
+    return (
+      Array.isArray(sent) && sent.some((msg) => fn(msg as MockSentMessage))
+    );
   }, predicate);
 };
 

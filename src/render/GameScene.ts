@@ -376,27 +376,32 @@ export class GameScene extends Phaser.Scene {
       this.clock.pause();
     }
     this.unsubscribeRoomState = useNetStore.subscribe(
-      (s) => s.roomState,
-      (roomState, previousRoomState) =>
-        this.onRoomStateChanged(roomState, previousRoomState)
+      (state, previousState) => {
+        if (state.roomState === previousState?.roomState) {
+          return;
+        }
+        this.onRoomStateChanged(state.roomState, previousState?.roomState);
+      }
     );
     this.unsubscribeCharacters = useNetStore.subscribe(
-      (s) => s.characterSelections,
-      (selections) => {
-        this.characterSelections = selections;
+      (state, previousState) => {
+        if (state.characterSelections === previousState?.characterSelections) {
+          return;
+        }
+        this.characterSelections = state.characterSelections;
         this.applyCharacterStyles();
       }
     );
-    this.unsubscribePlayers = useNetStore.subscribe(
-      (s) => s.players,
-      (players) => {
-        this.playerNames = new Map(
-          players.map((player) => [player.id, player.name])
-        );
-        this.applyCharacterStyles();
-        this.refreshPlayerLabels();
+    this.unsubscribePlayers = useNetStore.subscribe((state, previousState) => {
+      if (state.players === previousState?.players) {
+        return;
       }
-    );
+      this.playerNames = new Map(
+        state.players.map((player) => [player.id, player.name])
+      );
+      this.applyCharacterStyles();
+      this.refreshPlayerLabels();
+    });
   }
 
   private onRoomStateChanged(
