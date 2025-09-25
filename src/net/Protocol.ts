@@ -140,7 +140,7 @@ export interface S2CWelcome {
   seed: string;
   role: PlayerRole;
   roomState: NetRoomState;
-  lobby: LobbySnapshot;
+  lobby?: LobbySnapshot;
   cfg: NetConfig;
   featureFlags?: Record<string, boolean>;
 }
@@ -184,6 +184,7 @@ export interface S2CStart {
   serverTick: number;
   serverTimeMs: number;
   tps: number;
+  players: LobbyPlayer[];
 }
 
 export interface S2CRoleChanged {

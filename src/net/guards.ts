@@ -244,9 +244,13 @@ const validateWelcome = (value: unknown): GuardResult<S2CWelcome> => {
   if (!roomState.ok || !roomState.value) {
     return fail(roomState.error ?? 'invalid welcome.roomState');
   }
-  const lobby = validateLobbySnapshot(value.lobby);
-  if (!lobby.ok || !lobby.value) {
-    return fail(lobby.error ?? 'invalid welcome.lobby');
+  let lobby: LobbySnapshot | undefined;
+  if (value.lobby !== undefined) {
+    const lobbyResult = validateLobbySnapshot(value.lobby);
+    if (!lobbyResult.ok || !lobbyResult.value) {
+      return fail(lobbyResult.error ?? 'invalid welcome.lobby');
+    }
+    lobby = lobbyResult.value;
   }
   const cfg = validateConfig(value.cfg);
   if (!cfg.ok || !cfg.value) {
@@ -267,7 +271,7 @@ const validateWelcome = (value: unknown): GuardResult<S2CWelcome> => {
     seed: value.seed,
     role: role.value,
     roomState: roomState.value,
-    lobby: lobby.value,
+    lobby,
     cfg: cfg.value,
     featureFlags,
   });
@@ -435,11 +439,23 @@ const validateStart = (value: unknown): GuardResult<S2CStart> => {
   if (!isFiniteNumber(value.tps)) {
     return fail('start.tps must be number');
   }
+  if (!Array.isArray(value.players)) {
+    return fail('start.players must be array');
+  }
+  const players: LobbyPlayer[] = [];
+  for (let i = 0; i < value.players.length; i += 1) {
+    const result = validateLobbyPlayer(value.players[i]);
+    if (!result.ok || !result.value) {
+      return fail(result.error ?? `start.players[${i}] invalid`);
+    }
+    players.push(result.value);
+  }
   return ok({
     startTick: value.startTick as number,
     serverTick: value.serverTick as number,
     serverTimeMs: value.serverTimeMs as number,
     tps: value.tps as number,
+    players,
   });
 };
 

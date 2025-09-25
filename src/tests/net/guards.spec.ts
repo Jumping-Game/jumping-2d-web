@@ -77,6 +77,30 @@ describe('parseServerEnvelope', () => {
       throw new Error('Expected welcome envelope');
     }
     expect(result.value.payload.playerId).toBe('p_master');
+    expect(result.value.payload.lobby?.players).toHaveLength(2);
+  });
+
+  it('accepts a welcome envelope without a lobby snapshot', () => {
+    const welcome = {
+      ...baseEnvelope,
+      type: 'welcome' as const,
+      payload: {
+        playerId: 'p_master',
+        resumeToken: 'resume',
+        roomId: 'room-1',
+        seed: 'seed-1',
+        role: 'master' as const,
+        roomState: 'running' as const,
+        cfg: makeConfig(),
+      },
+    };
+
+    const result = parseServerEnvelope(welcome);
+    expect(result.ok).toBe(true);
+    if (!result.value || result.value.type !== 'welcome') {
+      throw new Error('Expected welcome envelope');
+    }
+    expect(result.value.payload.lobby).toBeUndefined();
   });
 
   it('rejects lobby_state messages with malformed players', () => {
@@ -164,5 +188,41 @@ describe('parseServerEnvelope', () => {
     const result = parseServerEnvelope(snapshot);
     expect(result.ok).toBe(false);
     expect(result.error).toContain('snapshot player.x');
+  });
+
+  it('accepts start payloads that include the roster', () => {
+    const start = {
+      ...baseEnvelope,
+      type: 'start' as const,
+      payload: {
+        startTick: 300,
+        serverTick: 1234,
+        serverTimeMs: Date.now(),
+        tps: 60,
+        players: [
+          {
+            id: 'p_master',
+            name: 'Master',
+            ready: true,
+            role: 'master' as const,
+            characterId: 'aurora',
+          },
+          {
+            id: 'p_member',
+            name: 'Member',
+            ready: true,
+            role: 'member' as const,
+            characterId: 'cobalt',
+          },
+        ],
+      },
+    };
+
+    const result = parseServerEnvelope(start);
+    expect(result.ok).toBe(true);
+    if (!result.value || result.value.type !== 'start') {
+      throw new Error('Expected start envelope');
+    }
+    expect(result.value.payload.players).toHaveLength(2);
   });
 });
