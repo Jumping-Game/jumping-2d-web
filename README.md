@@ -72,7 +72,7 @@ src/
 ├─ render/        # Phaser scenes, HUD, asset loader, storage helpers
 ├─ input/         # Keyboard + touch manager with deadzone normalisation
 ├─ ui/            # React overlays (menu, pause, game-over) + UI bridge
-├─ net/           # Protocol typings and NetClient stub (no I/O yet)
+├─ net/           # Protocol typings and WebSocket NetClient implementation
 └─ tests/         # Vitest unit specs + Playwright smoke
 ```
 
@@ -98,15 +98,38 @@ src/
 
 Light-weight PCM `.wav` effects (jump, spring, break) are generated at build time and triggered from simulation events. Playback waits for the first user gesture to satisfy mobile autoplay policies.
 
-## Realtime Integration TODOs
+## Multiplayer & Networking
 
-The stubbed networking layer mirrors [`NETWORK_PROTOCOL.md`](NETWORK_PROTOCOL.md) (`pv=1`). To enable live multiplayer:
+Sky Hopper includes a realtime multiplayer client aligned with [`NETWORK_PROTOCOL.md`](NETWORK_PROTOCOL.md) (`pv=1`).
 
-1. **Transport** – Replace `NetClientStub` with a WebSocket client that exchanges `Envelope<T>` messages (`join`, `input_batch`, `snapshot`, etc.).
-2. **Prediction & Reconciliation** – Buffer local inputs, apply snapshots from `S2C_Snapshot`, and rewind/replay authoritative ticks when deltas arrive.
-3. **Tick Alignment** – Use `S2C_Start` to anchor local time, apply render delay (`interpMs = max(2×RTT, 100 ms)`), and expose extrapolated poses for remote players.
-4. **State Compression** – Quantise floats to 0.1 units when serialising, pack deltas for moving platforms, and validate checksums from `C2S_Input`.
-5. **Lifecycle** – Handle `S2C_PlayerPresence`, `S2C_Finish`, reconnect (`C2S_Reconnect`), and keep pings flowing every 5 s.
+- `src/net/NetClient.ts` handles the WebSocket lifecycle (join → welcome → start), batches inputs, maintains ping/pong timers, and surfaces `snapshot`, `player_presence`, and `finish` events.
+- `GameScene` renders remote competitors using authoritative snapshots while continuing the deterministic local simulation.
+- The HUD shows the current round-trip time (RTT) or connection state.
+
+### Configuring the client
+
+Networking is configured via Vite env vars (e.g. `.env.local`). When no WebSocket URL is provided the game stays in offline mode.
+
+| Env var | Purpose |
+| ------- | ------- |
+| `VITE_NET_WS_URL` | WebSocket endpoint, e.g. `wss://rt.example.com/v1/ws` |
+| `VITE_NET_WS_TOKEN` | Optional auth token appended as `?token=` |
+| `VITE_NET_PLAYER_NAME` | Display name sent in the join payload |
+| `VITE_NET_CLIENT_VERSION` | Semantic version reported to the server |
+| `VITE_NET_DEVICE` | Optional device string for diagnostics |
+| `VITE_NET_CAP_TILT` / `VITE_NET_CAP_VIBRATE` | Advertise client capabilities (`0/1` or `true/false`) |
+| `VITE_NET_FLUSH_MS` | Input batch interval in milliseconds (default `50`) |
+| `VITE_NET_PING_MS` | Ping cadence in milliseconds (default `5000`) |
+| `VITE_NET_DEBUG` | Enable verbose socket logging (`1`/`true`) |
+
+Example `.env.local`:
+
+```ini
+VITE_NET_WS_URL=wss://rt.dev.example.com/v1/ws
+VITE_NET_WS_TOKEN=eyJhbGc...
+VITE_NET_PLAYER_NAME=dev-player
+VITE_NET_CLIENT_VERSION=web-1.0.0
+```
 
 ## Asset Pipeline
 

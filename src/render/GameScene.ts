@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CFG } from '../config/GameConfig';
+import { NET_CFG } from '../config/NetConfig';
 import { Clock } from '../core/Clock';
 import { World, SimEventType } from '../sim/World';
 import { PlayerState } from '../sim/Player';
@@ -11,7 +12,15 @@ import { AudioKeys, TextureKeys } from './Assets';
 import { SceneKeys } from './SceneKeys';
 import { saveHighScore, loadHighScore } from './Storage';
 import { getUIManager } from '../ui';
-import { NetClientStub } from '../net/NetClientStub';
+import { NetClient } from '../net/NetClient';
+import {
+  NetEvent,
+  S2CError,
+  S2CFinish,
+  S2CPlayerPresence,
+  S2CSnapshot,
+  S2CWelcome,
+} from '../net/Protocol';
 
 declare global {
   interface Window {
@@ -21,6 +30,16 @@ declare global {
 
 interface GameSceneData {
   seed: string;
+}
+
+interface RemotePlayerState {
+  sprite: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  alive: boolean;
+  lastSeen: number;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -41,7 +60,10 @@ export class GameScene extends Phaser.Scene {
   private bgMid!: Phaser.GameObjects.TileSprite;
   private bgNear!: Phaser.GameObjects.TileSprite;
   private pendingEvents: SimEventType[] = [];
-  private netClient = new NetClientStub();
+  private netClient!: NetClient;
+  private readonly remotePlayers = new Map<string, RemotePlayerState>();
+  private localPlayerId?: string;
+  private netLatencyMs = Number.NaN;
 
   constructor() {
     super(SceneKeys.Game);
@@ -108,7 +130,7 @@ export class GameScene extends Phaser.Scene {
       -CFG.camera.verticalOffset
     );
 
-    this.netClient.prepareJoin('solo');
+    this.setupNetworking();
 
     this.clock = new Clock(
       CFG.tps,
@@ -125,6 +147,7 @@ export class GameScene extends Phaser.Scene {
   update(): void {
     this.syncSprites();
     this.updateBackground();
+    this.updateRemotePlayerVisibility();
     this.processEvents();
     this.hud.update(this.world.score, this.highScore, this.game.loop.actualFps);
     window.__skyhopper = {
@@ -143,15 +166,209 @@ export class GameScene extends Phaser.Scene {
     this.powerupSprites.forEach((sprite) => sprite.destroy());
     this.platformSprites.clear();
     this.powerupSprites.clear();
+    this.remotePlayers.forEach((remote) => remote.sprite.destroy());
+    this.remotePlayers.clear();
+    this.netClient?.destroy();
   }
 
   private fixedStep(tick: number): void {
     const input = this.inputManager.sample(tick);
     this.world.step(input);
-    this.netClient.bufferInput(tick, input.axisX, input.jump);
+    this.netClient?.bufferInput(tick, input.axisX, input.jump);
 
     for (const event of this.world.drainEvents()) {
       this.pendingEvents.push(event.type);
+    }
+  }
+
+  private setupNetworking(): void {
+    this.netClient = new NetClient({
+      url: NET_CFG.wsUrl,
+      token: NET_CFG.wsToken,
+      playerName: NET_CFG.playerName,
+      clientVersion: NET_CFG.clientVersion,
+      device: NET_CFG.device,
+      capabilities: NET_CFG.capabilities,
+      flushIntervalMs: NET_CFG.flushIntervalMs,
+      pingIntervalMs: NET_CFG.pingIntervalMs,
+      debug: NET_CFG.debug,
+    });
+
+    this.netClient.onSnapshot((snapshot) => this.handleNetSnapshot(snapshot));
+    this.netClient.onPresence((presence) => this.handleNetPresence(presence));
+
+    if (!this.netClient.enabled) {
+      this.hud.setNetStatus('Offline');
+      return;
+    }
+
+    this.hud.setNetStatus('Connecting…');
+
+    this.netClient.onConnect(() => {
+      this.hud.setNetStatus('Connected');
+    });
+    this.netClient.onWelcome((welcome) => this.handleNetWelcome(welcome));
+    this.netClient.onLatency((latency) => this.handleNetLatency(latency));
+    this.netClient.onError((error) => this.handleNetError(error));
+    this.netClient.onDisconnect(() => this.handleNetDisconnect());
+    this.netClient.onFinish((finish) => this.handleNetFinish(finish));
+
+    this.netClient.prepareJoin(NET_CFG.playerName);
+  }
+
+  private handleNetWelcome(welcome: S2CWelcome): void {
+    this.localPlayerId = welcome.playerId;
+    if (welcome.seed) {
+      this.world.reset(welcome.seed);
+    }
+    this.handleNetLatency(this.netLatencyMs);
+  }
+
+  private handleNetSnapshot(snapshot: S2CSnapshot): void {
+    const now = this.time.now;
+    for (const netPlayer of snapshot.players) {
+      if (!netPlayer.id) continue;
+      if (netPlayer.id === this.localPlayerId) {
+        continue;
+      }
+      const state = this.getOrCreateRemotePlayer(netPlayer.id);
+      if (typeof netPlayer.x === 'number') {
+        state.x = netPlayer.x;
+      }
+      if (typeof netPlayer.y === 'number') {
+        state.y = netPlayer.y;
+      }
+      if (typeof netPlayer.vx === 'number') {
+        state.vx = netPlayer.vx;
+      }
+      if (typeof netPlayer.vy === 'number') {
+        state.vy = netPlayer.vy;
+      }
+      if (typeof netPlayer.alive === 'boolean') {
+        state.alive = netPlayer.alive;
+      }
+      state.lastSeen = now;
+      state.sprite.setPosition(Math.round(state.x), Math.round(-state.y));
+      state.sprite.setVisible(state.alive);
+      state.sprite.setAlpha(state.alive ? 0.85 : 0.3);
+    }
+
+    this.applyNetEvents(snapshot.events);
+  }
+
+  private handleNetPresence(presence: S2CPlayerPresence): void {
+    if (presence.id === this.localPlayerId) {
+      return;
+    }
+    const state = this.remotePlayers.get(presence.id);
+    if (!state) {
+      if (presence.state === 'left') {
+        return;
+      }
+      return;
+    }
+    switch (presence.state) {
+      case 'active':
+        state.alive = true;
+        state.sprite.setAlpha(0.85);
+        state.sprite.setVisible(true);
+        break;
+      case 'disconnected':
+        state.sprite.setAlpha(0.4);
+        break;
+      case 'left':
+        state.sprite.destroy();
+        this.remotePlayers.delete(presence.id);
+        break;
+    }
+  }
+
+  private handleNetLatency(latency: number): void {
+    this.netLatencyMs = latency;
+    if (!this.netClient.enabled) {
+      return;
+    }
+    const rounded = Math.round(latency);
+    const status = Number.isFinite(rounded)
+      ? `RTT ${Math.max(rounded, 0)} ms`
+      : 'Connected';
+    this.hud.setNetStatus(status);
+  }
+
+  private handleNetError(error: S2CError | Error): void {
+    if (!this.netClient.enabled) {
+      return;
+    }
+    const message =
+      'code' in error
+        ? `${error.code}${error.message ? `: ${error.message}` : ''}`
+        : error.message;
+    this.hud.setNetStatus(`Error: ${message}`);
+  }
+
+  private handleNetDisconnect(): void {
+    if (!this.netClient.enabled) {
+      return;
+    }
+    this.hud.setNetStatus('Disconnected');
+  }
+
+  private handleNetFinish(finish: S2CFinish): void {
+    if (!this.netClient.enabled) {
+      return;
+    }
+    this.hud.setNetStatus(`Match ended: ${finish.reason}`);
+  }
+
+  private applyNetEvents(events?: NetEvent[]): void {
+    if (!events?.length) {
+      return;
+    }
+    for (const event of events) {
+      if (event.kind === 'spring') {
+        this.pendingEvents.push(SimEventType.Spring);
+      } else if (event.kind === 'break') {
+        this.pendingEvents.push(SimEventType.PlatformBreak);
+      }
+    }
+  }
+
+  private getOrCreateRemotePlayer(id: string): RemotePlayerState {
+    let state = this.remotePlayers.get(id);
+    if (!state) {
+      const sprite = this.add
+        .image(0, 0, TextureKeys.Player)
+        .setOrigin(0.5, 1)
+        .setDepth(9)
+        .setTint(0x66ccff)
+        .setAlpha(0.85);
+      state = {
+        sprite,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        alive: true,
+        lastSeen: 0,
+      };
+      this.remotePlayers.set(id, state);
+    }
+    return state;
+  }
+
+  private updateRemotePlayerVisibility(): void {
+    if (this.remotePlayers.size === 0) {
+      return;
+    }
+    const now = this.time.now;
+    const staleMs = 5000;
+    for (const [id, remote] of this.remotePlayers) {
+      if (id === this.localPlayerId) {
+        continue;
+      }
+      if (now - remote.lastSeen > staleMs) {
+        remote.sprite.setVisible(false);
+      }
     }
   }
 
