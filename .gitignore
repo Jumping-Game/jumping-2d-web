@@ -19,3 +19,8 @@ pnpm-debug.log*
 .env.test.local
 .env.production.local
 /coverage
+
+# Lock
+yarn.lock
+pnpm-lock.yaml
+package-lock.json
