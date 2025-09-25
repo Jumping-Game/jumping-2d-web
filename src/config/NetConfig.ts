@@ -1,5 +1,9 @@
 export interface NetRuntimeConfig {
   enabled: boolean;
+  apiBaseUrl?: string;
+  defaultRegion?: string;
+  defaultMode?: string;
+  maxPlayers: number;
   wsUrl?: string;
   wsToken?: string;
   playerName: string;
@@ -36,9 +40,17 @@ const wsUrl = env.VITE_NET_WS_URL?.trim();
 const wsToken = env.VITE_NET_WS_TOKEN?.trim();
 const playerName = env.VITE_NET_PLAYER_NAME?.trim() || 'web-player';
 const clientVersion = env.VITE_NET_CLIENT_VERSION?.trim() || 'web-dev';
+const apiBaseUrl = env.VITE_NET_API_BASE_URL?.trim();
+const defaultRegion = env.VITE_NET_REGION?.trim();
+const defaultMode = env.VITE_NET_MODE?.trim();
+const maxPlayers = Math.max(1, toNumber(env.VITE_NET_MAX_PLAYERS, 4));
 
 export const NET_CFG: NetRuntimeConfig = {
-  enabled: Boolean(wsUrl),
+  enabled: Boolean(wsUrl || apiBaseUrl),
+  apiBaseUrl,
+  defaultRegion,
+  defaultMode,
+  maxPlayers,
   wsUrl,
   wsToken,
   playerName,

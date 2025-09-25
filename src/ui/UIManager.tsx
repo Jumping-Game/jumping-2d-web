@@ -5,11 +5,18 @@ import { PauseOverlay } from './PauseOverlay';
 
 type Screen = 'none' | 'menu' | 'pause' | 'gameover';
 
-interface Options {
-  onStart: () => void;
+interface MenuOptions {
+  onSoloStart: (playerName: string) => void;
+  onCreateRoom?: (playerName: string) => Promise<void>;
+  onJoinRoom?: (playerName: string, roomId: string) => Promise<void>;
+  highScore: number;
+  defaultName: string;
+  matchmakingAvailable: boolean;
+}
+
+interface Options extends MenuOptions {
   onResume: () => void;
   onRestart: () => void;
-  highScore: number;
   lastScore: number;
 }
 
@@ -21,18 +28,22 @@ export class UIManager {
   constructor(container: HTMLElement) {
     this.root = createRoot(container);
     this.opts = {
-      onStart: () => {},
+      onSoloStart: () => {},
+      onCreateRoom: undefined,
+      onJoinRoom: undefined,
       onResume: () => {},
       onRestart: () => {},
       highScore: 0,
       lastScore: 0,
+      defaultName: 'Player',
+      matchmakingAvailable: false,
     };
     this.render();
   }
 
-  showMenu(onStart: () => void, highScore: number) {
+  showMenu(options: MenuOptions) {
     this.screen = 'menu';
-    this.opts = { ...this.opts, onStart, highScore };
+    this.opts = { ...this.opts, ...options };
     this.render();
   }
 
@@ -54,7 +65,17 @@ export class UIManager {
   }
 
   private render() {
-    const { onStart, onResume, onRestart, highScore, lastScore } = this.opts;
+    const {
+      onSoloStart,
+      onCreateRoom,
+      onJoinRoom,
+      onResume,
+      onRestart,
+      highScore,
+      lastScore,
+      defaultName,
+      matchmakingAvailable,
+    } = this.opts;
     const screen = this.screen;
     this.root.render(
       <StrictMode>
@@ -72,7 +93,14 @@ export class UIManager {
           }}
         >
           {screen === 'menu' && (
-            <MainMenu onStart={onStart} highScore={highScore} />
+            <MainMenu
+              highScore={highScore}
+              defaultName={defaultName}
+              matchmakingAvailable={matchmakingAvailable}
+              onSoloStart={onSoloStart}
+              onCreateRoom={onCreateRoom}
+              onJoinRoom={onJoinRoom}
+            />
           )}
           {screen === 'pause' && <PauseOverlay onResume={onResume} />}
           {screen === 'gameover' && (

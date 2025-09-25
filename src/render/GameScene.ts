@@ -21,6 +21,8 @@ import {
   S2CSnapshot,
   S2CWelcome,
 } from '../net/Protocol';
+import type { MatchSessionConfig } from '../net/types';
+import { leaveRoom } from '../net/matchmaking';
 
 declare global {
   interface Window {
@@ -30,6 +32,7 @@ declare global {
 
 interface GameSceneData {
   seed: string;
+  netSession?: MatchSessionConfig;
 }
 
 interface RemotePlayerState {
@@ -64,6 +67,7 @@ export class GameScene extends Phaser.Scene {
   private readonly remotePlayers = new Map<string, RemotePlayerState>();
   private localPlayerId?: string;
   private netLatencyMs = Number.NaN;
+  private netSession?: MatchSessionConfig;
 
   constructor() {
     super(SceneKeys.Game);
@@ -75,6 +79,7 @@ export class GameScene extends Phaser.Scene {
     this.pendingEvents = [];
     this.highScore = loadHighScore();
     this.paused = false;
+    this.netSession = data?.netSession;
   }
 
   create(): void {
@@ -168,6 +173,7 @@ export class GameScene extends Phaser.Scene {
     this.powerupSprites.clear();
     this.remotePlayers.forEach((remote) => remote.sprite.destroy());
     this.remotePlayers.clear();
+    void this.sendLeaveRequest();
     this.netClient?.destroy();
   }
 
@@ -182,10 +188,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupNetworking(): void {
+    const session: MatchSessionConfig | undefined =
+      this.netSession ??
+      (NET_CFG.wsUrl
+        ? {
+            wsUrl: NET_CFG.wsUrl,
+            wsToken: NET_CFG.wsToken,
+            playerName: NET_CFG.playerName,
+            apiBaseUrl: NET_CFG.apiBaseUrl,
+          }
+        : undefined);
+
+    this.netSession = session;
+
     this.netClient = new NetClient({
-      url: NET_CFG.wsUrl,
-      token: NET_CFG.wsToken,
-      playerName: NET_CFG.playerName,
+      url: session?.wsUrl,
+      token: session?.wsToken,
+      playerName: session?.playerName ?? NET_CFG.playerName,
       clientVersion: NET_CFG.clientVersion,
       device: NET_CFG.device,
       capabilities: NET_CFG.capabilities,
@@ -213,13 +232,19 @@ export class GameScene extends Phaser.Scene {
     this.netClient.onDisconnect(() => this.handleNetDisconnect());
     this.netClient.onFinish((finish) => this.handleNetFinish(finish));
 
-    this.netClient.prepareJoin(NET_CFG.playerName);
+    this.netClient.prepareJoin(session?.playerName ?? NET_CFG.playerName);
   }
 
   private handleNetWelcome(welcome: S2CWelcome): void {
     this.localPlayerId = welcome.playerId;
     if (welcome.seed) {
       this.world.reset(welcome.seed);
+    }
+    if (this.netSession) {
+      this.netSession = {
+        ...this.netSession,
+        roomId: welcome.roomId ?? this.netSession.roomId,
+      };
     }
     this.handleNetLatency(this.netLatencyMs);
   }
@@ -318,6 +343,21 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.hud.setNetStatus(`Match ended: ${finish.reason}`);
+  }
+
+  private async sendLeaveRequest(): Promise<void> {
+    if (!this.netSession?.apiBaseUrl || !this.netSession.roomId) {
+      return;
+    }
+    try {
+      await leaveRoom(this.netSession.roomId, {
+        baseUrl: this.netSession.apiBaseUrl,
+      });
+    } catch (error) {
+      if (NET_CFG.debug) {
+        console.warn('[GameScene] Failed to notify server about leave', error);
+      }
+    }
   }
 
   private applyNetEvents(events?: NetEvent[]): void {
