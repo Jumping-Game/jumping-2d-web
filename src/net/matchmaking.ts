@@ -1,4 +1,4 @@
-import { NET_CFG } from '../config/NetConfig';
+import { NET_CFG } from './config';
 
 export interface CreateRoomParams {
   name: string;

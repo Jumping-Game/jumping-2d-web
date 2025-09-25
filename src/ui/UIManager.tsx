@@ -2,8 +2,9 @@ import { createRoot, Root } from 'react-dom/client';
 import { StrictMode } from 'react';
 import { MainMenu } from './MainMenu';
 import { PauseOverlay } from './PauseOverlay';
+import { Lobby } from './Lobby';
 
-type Screen = 'none' | 'menu' | 'pause' | 'gameover';
+type Screen = 'none' | 'menu' | 'lobby' | 'pause' | 'gameover';
 
 interface MenuOptions {
   onSoloStart: (playerName: string) => void;
@@ -18,6 +19,9 @@ interface Options extends MenuOptions {
   onResume: () => void;
   onRestart: () => void;
   lastScore: number;
+  onReadyToggle?: (ready: boolean) => void;
+  onStartMatch?: () => void;
+  onLeaveRoom?: () => void;
 }
 
 export class UIManager {
@@ -37,12 +41,25 @@ export class UIManager {
       lastScore: 0,
       defaultName: 'Player',
       matchmakingAvailable: false,
+      onReadyToggle: undefined,
+      onStartMatch: undefined,
+      onLeaveRoom: undefined,
     };
     this.render();
   }
 
   showMenu(options: MenuOptions) {
     this.screen = 'menu';
+    this.opts = { ...this.opts, ...options };
+    this.render();
+  }
+
+  showLobby(options: {
+    onReadyToggle?: (ready: boolean) => void;
+    onStartMatch?: () => void;
+    onLeaveRoom?: () => void;
+  }) {
+    this.screen = 'lobby';
     this.opts = { ...this.opts, ...options };
     this.render();
   }
@@ -75,6 +92,9 @@ export class UIManager {
       lastScore,
       defaultName,
       matchmakingAvailable,
+      onReadyToggle,
+      onStartMatch,
+      onLeaveRoom,
     } = this.opts;
     const screen = this.screen;
     this.root.render(
@@ -100,6 +120,13 @@ export class UIManager {
               onSoloStart={onSoloStart}
               onCreateRoom={onCreateRoom}
               onJoinRoom={onJoinRoom}
+            />
+          )}
+          {screen === 'lobby' && (
+            <Lobby
+              onToggleReady={onReadyToggle}
+              onStart={onStartMatch}
+              onLeave={onLeaveRoom}
             />
           )}
           {screen === 'pause' && <PauseOverlay onResume={onResume} />}

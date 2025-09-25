@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { CFG } from '../config/GameConfig';
-import { NET_CFG } from '../config/NetConfig';
+import { NET_CFG } from '../net/config';
 import { Clock } from '../core/Clock';
 import { World, SimEventType } from '../sim/World';
 import { PlayerState } from '../sim/Player';
@@ -15,14 +15,18 @@ import { getUIManager } from '../ui';
 import { NetClient } from '../net/NetClient';
 import {
   NetEvent,
+  NetRoomState,
   S2CError,
   S2CFinish,
   S2CPlayerPresence,
   S2CSnapshot,
+  S2CStart,
+  S2CStartCountdown,
   S2CWelcome,
 } from '../net/Protocol';
 import type { MatchSessionConfig } from '../net/types';
 import { leaveRoom } from '../net/matchmaking';
+import { useNetStore } from '../state/store';
 
 declare global {
   interface Window {
@@ -68,6 +72,41 @@ export class GameScene extends Phaser.Scene {
   private localPlayerId?: string;
   private netLatencyMs = Number.NaN;
   private netSession?: MatchSessionConfig;
+  private netRoomState: NetRoomState = 'running';
+  private unsubscribeRoomState?: () => void;
+  private lobbyVisible = false;
+  private leavingRoom = false;
+  private readonly handleReadyToggle = (ready: boolean): void => {
+    if (!this.netClient?.enabled) {
+      return;
+    }
+    const state = useNetStore.getState();
+    if (state.roomState !== 'lobby') {
+      return;
+    }
+    this.netClient.setReady(ready);
+  };
+
+  private readonly handleStartMatch = (): void => {
+    if (!this.netClient?.enabled) {
+      return;
+    }
+    const state = useNetStore.getState();
+    if (state.countdown || state.roomState !== 'lobby') {
+      return;
+    }
+    this.netClient.requestStart(3);
+  };
+
+  private readonly handleLeaveLobby = (): void => {
+    if (this.leavingRoom) {
+      return;
+    }
+    this.leavingRoom = true;
+    getUIManager().hide();
+    this.scene.stop(SceneKeys.Game);
+    this.scene.start(SceneKeys.Menu);
+  };
 
   constructor() {
     super(SceneKeys.Game);
@@ -80,6 +119,11 @@ export class GameScene extends Phaser.Scene {
     this.highScore = loadHighScore();
     this.paused = false;
     this.netSession = data?.netSession;
+    this.netRoomState = 'running';
+    this.lobbyVisible = false;
+    this.leavingRoom = false;
+    this.unsubscribeRoomState?.();
+    this.unsubscribeRoomState = undefined;
   }
 
   create(): void {
@@ -120,7 +164,10 @@ export class GameScene extends Phaser.Scene {
       .setDepth(10);
 
     this.inputManager = new InputManager(this);
-    this.hud = new Hud(this, { showFps: import.meta.env.DEV });
+    this.hud = new Hud(this, {
+      showFps: import.meta.env.DEV,
+      showNetDebug: import.meta.env.DEV,
+    });
     this.hud.onPause(() => this.togglePause());
 
     const esc = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
@@ -146,6 +193,10 @@ export class GameScene extends Phaser.Scene {
     );
     this.clock.start();
 
+    if (this.netClient.enabled) {
+      this.bindNetStore();
+    }
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.onShutdown());
   }
 
@@ -155,6 +206,20 @@ export class GameScene extends Phaser.Scene {
     this.updateRemotePlayerVisibility();
     this.processEvents();
     this.hud.update(this.world.score, this.highScore, this.game.loop.actualFps);
+    if (this.netClient.enabled) {
+      const storeState = useNetStore.getState();
+      this.hud.setNetDebug({
+        tick: this.world.tick,
+        role: storeState.role,
+        roomState: storeState.roomState,
+        rtt: this.netLatencyMs,
+        ackTick: storeState.net.ackTick,
+        lastInputSeq: storeState.net.lastInputSeq,
+        droppedSnapshots: storeState.net.droppedSnapshots,
+      });
+    } else {
+      this.hud.setNetDebug();
+    }
     window.__skyhopper = {
       score: this.world.score,
       tick: this.world.tick,
@@ -166,6 +231,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onShutdown(): void {
+    this.unsubscribeRoomState?.();
+    this.unsubscribeRoomState = undefined;
+    if (this.lobbyVisible) {
+      getUIManager().hide();
+      this.lobbyVisible = false;
+    }
     this.clock.stop();
     this.platformSprites.forEach((sprite) => sprite.destroy());
     this.powerupSprites.forEach((sprite) => sprite.destroy());
@@ -178,6 +249,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private fixedStep(tick: number): void {
+    if (this.netClient.enabled && this.netRoomState !== 'running') {
+      return;
+    }
     const input = this.inputManager.sample(tick);
     this.world.step(input);
     this.netClient?.bufferInput(tick, input.axisX, input.jump);
@@ -231,8 +305,72 @@ export class GameScene extends Phaser.Scene {
     this.netClient.onError((error) => this.handleNetError(error));
     this.netClient.onDisconnect(() => this.handleNetDisconnect());
     this.netClient.onFinish((finish) => this.handleNetFinish(finish));
+    this.netClient.onStart((start) => this.handleNetStart(start));
+    this.netClient.onStartCountdown((payload) =>
+      this.handleNetStartCountdown(payload)
+    );
 
     this.netClient.prepareJoin(session?.playerName ?? NET_CFG.playerName);
+  }
+
+  private bindNetStore(): void {
+    if (!this.netClient.enabled) {
+      this.netRoomState = 'running';
+      return;
+    }
+    const state = useNetStore.getState();
+    this.netRoomState = state.roomState;
+    if (this.netRoomState !== 'running') {
+      this.showLobbyUI();
+      this.clock.pause();
+    }
+    this.unsubscribeRoomState = useNetStore.subscribe(
+      (s) => s.roomState,
+      (roomState, previousRoomState) =>
+        this.onRoomStateChanged(roomState, previousRoomState)
+    );
+  }
+
+  private onRoomStateChanged(
+    roomState: NetRoomState,
+    previousRoomState?: NetRoomState
+  ): void {
+    if (!this.netClient.enabled) {
+      return;
+    }
+    if (roomState === previousRoomState) {
+      return;
+    }
+    this.netRoomState = roomState;
+    if (roomState === 'running') {
+      this.hideLobbyUI();
+      this.clock.resume();
+    } else {
+      this.showLobbyUI();
+      this.clock.pause();
+      this.remotePlayers.forEach((remote) => remote.sprite.setVisible(false));
+    }
+  }
+
+  private showLobbyUI(): void {
+    if (!this.netClient.enabled || this.lobbyVisible || this.leavingRoom) {
+      return;
+    }
+    const ui = getUIManager();
+    ui.showLobby({
+      onReadyToggle: this.handleReadyToggle,
+      onStartMatch: this.handleStartMatch,
+      onLeaveRoom: this.handleLeaveLobby,
+    });
+    this.lobbyVisible = true;
+  }
+
+  private hideLobbyUI(): void {
+    if (!this.lobbyVisible) {
+      return;
+    }
+    getUIManager().hide();
+    this.lobbyVisible = false;
   }
 
   private handleNetWelcome(welcome: S2CWelcome): void {
@@ -249,7 +387,28 @@ export class GameScene extends Phaser.Scene {
     this.handleNetLatency(this.netLatencyMs);
   }
 
+  private handleNetStart(start: S2CStart): void {
+    if (!this.netClient.enabled) {
+      return;
+    }
+    this.netRoomState = 'running';
+    this.hideLobbyUI();
+    this.clock.resume();
+  }
+
+  private handleNetStartCountdown(countdown: S2CStartCountdown): void {
+    if (!this.netClient.enabled) {
+      return;
+    }
+    this.netRoomState = 'starting';
+    this.showLobbyUI();
+    this.clock.pause();
+  }
+
   private handleNetSnapshot(snapshot: S2CSnapshot): void {
+    if (this.netClient.enabled && this.netRoomState !== 'running') {
+      return;
+    }
     const now = this.time.now;
     for (const netPlayer of snapshot.players) {
       if (!netPlayer.id) continue;
@@ -335,6 +494,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.netClient.enabled) {
       return;
     }
+    this.netLatencyMs = Number.NaN;
+    this.netRoomState = 'finished';
+    this.showLobbyUI();
+    this.clock.pause();
     this.hud.setNetStatus('Disconnected');
   }
 
@@ -342,6 +505,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.netClient.enabled) {
       return;
     }
+    this.netLatencyMs = Number.NaN;
+    this.netRoomState = 'finished';
+    this.showLobbyUI();
+    this.clock.pause();
     this.hud.setNetStatus(`Match ended: ${finish.reason}`);
   }
 

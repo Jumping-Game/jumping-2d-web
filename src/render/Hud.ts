@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 
 interface HudOptions {
   showFps?: boolean;
+  showNetDebug?: boolean;
 }
 
 export class Hud {
@@ -11,6 +12,7 @@ export class Hud {
   private readonly fpsText: Phaser.GameObjects.Text;
   private readonly pauseButton: Phaser.GameObjects.Text;
   private readonly netStatusText: Phaser.GameObjects.Text;
+  private readonly netDebugText: Phaser.GameObjects.Text;
 
   constructor(scene: Scene, options: HudOptions = {}) {
     this.scene = scene;
@@ -56,6 +58,15 @@ export class Hud {
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setVisible(false);
+
+    this.netDebugText = scene.add
+      .text(scene.scale.width - 24, 96, '', {
+        ...style,
+        fontSize: '12px',
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setVisible(options.showNetDebug ?? false);
   }
 
   update(score: number, highScore: number, fps: number): void {
@@ -77,5 +88,39 @@ export class Hud {
     }
     this.netStatusText.setText(status);
     this.netStatusText.setVisible(true);
+  }
+
+  setNetDebug(info?: {
+    tick: number;
+    role: string;
+    roomState: string;
+    rtt?: number;
+    ackTick?: number;
+    lastInputSeq?: number;
+    droppedSnapshots?: number;
+  }): void {
+    if (!this.netDebugText.visible) {
+      return;
+    }
+    if (!info) {
+      this.netDebugText.setText('');
+      return;
+    }
+    const parts: string[] = [`tick ${info.tick}`];
+    if (typeof info.rtt === 'number' && Number.isFinite(info.rtt)) {
+      parts.push(`rtt ${Math.max(0, Math.round(info.rtt))}ms`);
+    }
+    parts.push(`role ${info.role}`);
+    parts.push(`state ${info.roomState}`);
+    if (typeof info.ackTick === 'number') {
+      parts.push(`ack ${info.ackTick}`);
+    }
+    if (typeof info.lastInputSeq === 'number') {
+      parts.push(`seq ${info.lastInputSeq}`);
+    }
+    if (typeof info.droppedSnapshots === 'number') {
+      parts.push(`drop ${info.droppedSnapshots}`);
+    }
+    this.netDebugText.setText(parts.join('  '));
   }
 }

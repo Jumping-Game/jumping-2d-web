@@ -3,7 +3,7 @@ import { TextureKeys } from './Assets';
 import { SceneKeys } from './SceneKeys';
 import { getUIManager } from '../ui';
 import { loadHighScore } from './Storage';
-import { NET_CFG } from '../config/NetConfig';
+import { NET_CFG } from '../net/config';
 import { createRoom, joinRoom } from '../net/matchmaking';
 import type { MatchSessionConfig } from '../net/types';
 
