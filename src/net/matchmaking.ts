@@ -41,6 +41,10 @@ interface RequestOptions {
   baseUrl?: string;
 }
 
+interface LeaveRoomOptions extends RequestOptions {
+  reason?: string;
+}
+
 const ensureBaseUrl = (override?: string): string => {
   const base = override ?? NET_CFG.apiBaseUrl;
   if (!base) {
@@ -133,12 +137,17 @@ export const joinRoom = async (
 
 export const leaveRoom = async (
   roomId: string,
-  options?: RequestOptions
+  options?: LeaveRoomOptions
 ): Promise<void> => {
+  const payload = options?.reason ? { reason: options.reason } : {};
   const response = await fetch(
     buildUrl(`/v1/rooms/${encodeURIComponent(roomId)}/leave`, options?.baseUrl),
     {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
     }
   );
 
