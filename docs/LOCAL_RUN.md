@@ -45,3 +45,13 @@ mocks, make sure they expose the REST endpoints under `/v1` and the WebSocket at
 
 When running the e2e suite manually, start the dev server in a separate terminal
 first or rely on Playwright's built-in `webServer` hook (used by `pnpm test:e2e`).
+
+## 5. Protocol expectations (pv=1)
+
+Local mocks must follow the `Final v1.2.1` protocol:
+
+- `start` responses include the full roster from the lobby (ids, roles, readiness, character).
+- The first snapshot after `start` or a reconnect is marked `full: true` and lists every alive
+  player before deltas resume.
+- Clients ignore `input` until the authoritative `start` arrives, so keep the lobby in
+  `state: "lobby"` until the countdown completes.

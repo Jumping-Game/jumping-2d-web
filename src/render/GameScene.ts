@@ -100,7 +100,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const state = useNetStore.getState();
-    if (state.countdown || state.roomState !== 'lobby') {
+    if (
+      state.countdown ||
+      state.roomState !== 'lobby' ||
+      state.role !== 'master'
+    ) {
       return;
     }
     this.netClient.requestStart(3);
@@ -550,6 +554,24 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const now = this.time.now;
+    if (snapshot.full) {
+      const seen = new Set(
+        snapshot.players
+          .map((player) => player.id)
+          .filter((id): id is string => typeof id === 'string')
+      );
+      for (const [id, remote] of this.remotePlayers) {
+        if (id === this.localPlayerId) {
+          continue;
+        }
+        if (!seen.has(id)) {
+          remote.alive = false;
+          remote.lastSeen = now;
+          remote.sprite.setVisible(false);
+          remote.label.setVisible(false);
+        }
+      }
+    }
     for (const netPlayer of snapshot.players) {
       if (!netPlayer.id) continue;
       if (netPlayer.id === this.localPlayerId) {
