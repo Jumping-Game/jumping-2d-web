@@ -92,6 +92,7 @@ export class NetClient {
   private role: PlayerRole = 'member';
   private startAcknowledged = false;
   private serverSkewMs = 0;
+  private hasReceivedFullSnapshot = false;
 
   public playerId?: string;
   public roomId?: string;
@@ -299,6 +300,7 @@ export class NetClient {
     this.roomState = 'lobby';
     this.role = 'member';
     this.serverSkewMs = 0;
+    this.hasReceivedFullSnapshot = false;
     this.inputBuffer.length = 0;
     this.store.reset();
     this.stopPingTimer();
@@ -462,6 +464,8 @@ export class NetClient {
     this.role = welcome.role;
     this.startAcknowledged = welcome.roomState === 'running';
     this.serverSkewMs = 0;
+    this.hasReceivedFullSnapshot =
+      welcome.roomState === 'running' ? false : this.hasReceivedFullSnapshot;
 
     const store = this.store;
     store.setIdentity({
@@ -485,9 +489,7 @@ export class NetClient {
     const lobbyState: S2CLobbyState = {
       roomState: welcome.roomState,
       players: lobbyPlayers,
-      ...(lobbyMaxPlayers !== undefined
-        ? { maxPlayers: lobbyMaxPlayers }
-        : {}),
+      ...(lobbyMaxPlayers !== undefined ? { maxPlayers: lobbyMaxPlayers } : {}),
     };
     this.lobbyHandlers.forEach((cb) => {
       try {
@@ -509,6 +511,7 @@ export class NetClient {
     this.roomState = state.roomState;
     if (state.roomState !== 'running') {
       this.startAcknowledged = false;
+      this.hasReceivedFullSnapshot = false;
     }
     const store = this.store;
     store.setRoomState(state.roomState);
@@ -536,6 +539,7 @@ export class NetClient {
     this.roomState = 'starting';
     this.startAcknowledged = false;
     this.serverSkewMs = countdown.startAtMs - Date.now();
+    this.hasReceivedFullSnapshot = false;
     this.inputBuffer.length = 0;
     const store = this.store;
     store.setRoomState('starting');
@@ -558,6 +562,7 @@ export class NetClient {
     this.startAcknowledged = true;
     this.serverSkewMs = start.serverTimeMs - Date.now();
     this.lastFlushTime = nowMs();
+    this.hasReceivedFullSnapshot = false;
     this.inputBuffer.length = 0;
     const store = this.store;
     store.setRoomState('running');
@@ -705,6 +710,16 @@ export class NetClient {
   }
 
   private emitSnapshot(snapshot: S2CSnapshot): void {
+    if (!snapshot.full) {
+      if (!this.hasReceivedFullSnapshot) {
+        if (this.opts.debug) {
+          console.warn('[NetClient] Dropping delta snapshot before first FULL');
+        }
+        return;
+      }
+    } else {
+      this.hasReceivedFullSnapshot = true;
+    }
     const ackTick = snapshot.ackTick;
     if (typeof ackTick === 'number' && this.inputBuffer.length > 0) {
       const dropIndex = this.inputBuffer.findIndex(
