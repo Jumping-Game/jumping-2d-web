@@ -218,11 +218,13 @@ interface RemoteStub {
   lastSeen: number;
 }
 
-type GameSceneInternals = GameScene & {
+type GameSceneInternals = Omit<
+  GameScene,
+  'netClient' | 'netRoomState' | 'localPlayerId' | 'remotePlayers'
+> & {
   netClient: NetClient;
   netRoomState: NetRoomState;
   localPlayerId?: string;
-  time: { now: number };
   remotePlayers: Map<string, RemoteStub>;
   getOrCreateRemotePlayer(id: string): RemoteStub;
   handleStartMatch(): void;
@@ -386,13 +388,13 @@ describe('Lobby start restrictions and snapshot reconciliation', () => {
   });
 
   it('prevents members from sending start requests', () => {
-    const scene = new GameScene() as GameSceneInternals;
+    const scene = new GameScene() as unknown as GameSceneInternals;
 
     const requestStart = vi.fn();
     scene.netClient = {
       enabled: true,
       requestStart,
-    } as NetClient;
+    } as unknown as NetClient;
 
     const store = useNetStore.getState();
     store.setRoomState('lobby');
@@ -406,9 +408,9 @@ describe('Lobby start restrictions and snapshot reconciliation', () => {
   });
 
   it('hides remote players missing from a full snapshot broadcast', () => {
-    const scene = new GameScene() as GameSceneInternals;
+    const scene = new GameScene() as unknown as GameSceneInternals;
 
-    scene.netClient = { enabled: true } as NetClient;
+    scene.netClient = { enabled: true } as unknown as NetClient;
     scene.netRoomState = 'running';
     scene.localPlayerId = 'p1';
     scene.time.now = 5000;
